@@ -15,6 +15,10 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+      - name: Use a stable Python version for Core ML export
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Set up the Core ML export tools
         shell: bash
