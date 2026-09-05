@@ -20,14 +20,16 @@ performer turns the phone over after dealing.
 
 ```text
 Rear camera (1080p, 240 fps preferred)
-  -> sharp-frame sampler (at most 18 model inputs/sec)
+  -> sharp-frame sampler (at most 30 model inputs/sec)
   -> Core ML object detector, entirely on the phone
   -> position-aware card event coordinator
   -> persistent SwiftUI card history
 ```
 
-`CameraService` chooses the fastest 1920x1080 back-camera format that supports
-240 fps, then falls back to 120 fps and 60 fps. `SharpFrameSampler`
+`CameraService` chooses a 1920x1080 back-camera format first, using 240 fps when
+that resolution supports it, then falling back to 120 fps and 60 fps. It only
+uses a lower-resolution high-speed format when no clear 1080p mode exists.
+`SharpFrameSampler`
 measures luma-edge contrast on the inexpensive camera luma plane and retains
 the clearest frame from each sampling interval. It keeps collecting while the
 previous inference runs, so a short card pass is not lost to a busy model. This
@@ -39,12 +41,13 @@ this model from the `cdpcre/french_cards_detector_pytorch` weight with NMS
 enabled, so Vision returns labelled card boxes. Vision uses aspect-fit scaling,
 which keeps the whole camera image in scope instead of cropping it to a square.
 
-`CardEventCoordinator` matches detection boxes across frames by overlap and
-nearby centre position. A very high-confidence detection is recorded at once;
-other results require the same label in two of the three latest detections and
-a mean confidence of at least 0.55. Each exact card face is recorded only once
-per scan session, which prevents repeated entries if a fast pass briefly loses
-tracking. Different ranks with the same suit are separate cards.
+`CardEventCoordinator` matches detection boxes across frames by overlap,
+predicted centre position and velocity. Normal results require two consistent
+observations in a five-frame confidence-weighted vote; a single frame is only
+accepted at 0.97 confidence. Each exact card face is recorded only once per
+scan session, and a short spatial/trajectory guard suppresses a duplicate when
+a fast pass briefly loses tracking. Different ranks with the same suit are
+separate cards.
 
 ## Failure behavior
 

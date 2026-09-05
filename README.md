@@ -10,12 +10,14 @@ network connection while scanning.
 
 ## What the first version does
 
-- Requests the rear camera and prefers 1920x1080 at 240 fps for fast dealing;
-  it falls back to 120 fps, then 60 fps when needed.
+- Requests the rear camera and prefers a clear 1920x1080 stream. It uses 240
+  fps when that resolution is available, otherwise 120 fps and then 60 fps.
 - Samples the high-frame-rate stream, retaining a sharp candidate frame instead
   of trying to run the neural model on all 240 frames.
-- Detects cards anywhere in the frame, tracks their position, and records a
-  card on one very high-confidence recognition or two consistent recognitions.
+- Detects cards anywhere in the frame, tracks their position and velocity, and
+  records a card after two consistent recognitions. A single frame is accepted
+  only at an exceptionally high confidence, so a motion-blurred false label
+  cannot permanently win the vote.
 - Keeps the complete detection history until the `Clear` button is tapped.
 - Records each exact card only once per scan session, even if tracking briefly
   loses it and redetects it. Different cards with the same suit are still

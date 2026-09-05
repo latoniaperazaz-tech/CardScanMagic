@@ -19,8 +19,12 @@ final class SharpFrameSampler {
     private var revision: UInt64 = 0
 
     init(
-        maximumInferencesPerSecond: Double = 18,
-        maximumQualitySamplesPerSecond: Double = 80
+        // A card that crosses the view in 100–200 ms only produces a handful
+        // of usable frames.  Thirty model inputs per second gives the tracker
+        // enough evidence while the single-inference gate still prevents a
+        // backlog on the A16/A17 Neural Engine.
+        maximumInferencesPerSecond: Double = 30,
+        maximumQualitySamplesPerSecond: Double = 120
     ) {
         inferenceInterval = 1 / maximumInferencesPerSecond
         qualityInterval = 1 / maximumQualitySamplesPerSecond

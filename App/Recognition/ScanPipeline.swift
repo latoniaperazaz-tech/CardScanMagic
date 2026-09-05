@@ -95,7 +95,13 @@ final class ScanPipeline {
 
                 self.onDetections?(sessionID, detections)
 
-                let records = self.coordinator.process(detections, at: Date())
+                // Use the camera sample's monotonic timestamp rather than the
+                // wall-clock time at which Vision happens to finish.  Model
+                // latency can vary from frame to frame; using Date() here
+                // makes a fast pass look stationary and breaks track timeout
+                // and duplicate cooldown decisions.
+                let captureDate = Date(timeIntervalSinceReferenceDate: selectedFrame.1)
+                let records = self.coordinator.process(detections, at: captureDate)
                 guard self.sessionGate.shouldDeliver(for: sessionID), !records.isEmpty else { return }
                 self.onRecords?(sessionID, records)
             } catch {

@@ -1,6 +1,7 @@
 import CoreML
 import CoreVideo
 import Foundation
+import ImageIO
 import Vision
 
 enum RecognitionError: LocalizedError {
@@ -39,7 +40,15 @@ final class RecognitionEngine {
     }
 
     func recognize(pixelBuffer: CVPixelBuffer) throws -> [CardDetection] {
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up)
+        // AVCaptureVideoDataOutput may deliver either the sensor's native
+        // landscape buffer or an already-rotated portrait buffer depending on
+        // the selected camera format/iOS version.  Passing `.up` blindly for
+        // the rear camera makes Vision see a portrait card sideways on some
+        // devices, which is especially damaging to rank/suit classification.
+        // Derive the orientation from the actual buffer so the same build works
+        // with both kinds of output.
+        let orientation = Self.orientation(for: pixelBuffer)
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation)
         try handler.perform([request])
 
         guard let observations = request.results as? [VNRecognizedObjectObservation] else {
@@ -57,5 +66,16 @@ final class RecognitionEngine {
                 boundingBox: observation.boundingBox
             )
         }
+    }
+
+    /// The rear camera is configured for portrait output.  A landscape pixel
+    /// buffer therefore needs a clockwise quarter turn before Vision sees the
+    /// portrait image; a portrait buffer is already correctly oriented.
+    /// Keeping this helper pure also makes the orientation decision easy to
+    /// verify without requiring a camera in tests.
+    static func orientation(for pixelBuffer: CVPixelBuffer) -> CGImagePropertyOrientation {
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        return width > height ? .right : .up
     }
 }

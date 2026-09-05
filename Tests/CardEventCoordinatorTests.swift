@@ -26,7 +26,7 @@ final class CardEventCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.process([detection], at: start.addingTimeInterval(0.16)).isEmpty)
     }
 
-    func testVeryHighConfidenceCardRecordsOnTheFirstFrame() throws {
+    func testOrdinaryHighConfidenceCardWaitsForConfirmation() throws {
         let coordinator = CardEventCoordinator()
         let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
         let detection = CardDetection(
@@ -35,10 +35,84 @@ final class CardEventCoordinatorTests: XCTestCase {
             boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3)
         )
 
-        XCTAssertEqual(
-            coordinator.process([detection], at: Date(timeIntervalSinceReferenceDate: 100)).count,
-            1
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+        XCTAssertTrue(coordinator.process([detection], at: start).isEmpty)
+        XCTAssertEqual(coordinator.process([detection], at: start.addingTimeInterval(0.04)).count, 1)
+    }
+
+    func testConflictingLatestHighConfidenceDoesNotOverrideConsensus() throws {
+        let coordinator = CardEventCoordinator()
+        let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
+        let sevenHearts = try XCTUnwrap(CardFace.parse("7h"))
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+        let box = CGRect(x: 0.35, y: 0.3, width: 0.2, height: 0.3)
+
+        func detection(_ card: CardFace, _ confidence: Float) -> CardDetection {
+            CardDetection(card: card, confidence: confidence, boundingBox: box)
+        }
+
+        XCTAssertTrue(coordinator.process([detection(aceHearts, 0.75)], at: start).isEmpty)
+        XCTAssertTrue(coordinator.process([detection(aceHearts, 0.76)], at: start.addingTimeInterval(0.04)).isEmpty == false)
+        // A later sharp but conflicting label must not create a second record.
+        XCTAssertTrue(coordinator.process([detection(sevenHearts, 0.98)], at: start.addingTimeInterval(0.08)).isEmpty)
+    }
+
+    func testNextCardOnTheSamePathIsNotSwallowedByRecordedTrack() throws {
+        let coordinator = CardEventCoordinator()
+        let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
+        let sevenHearts = try XCTUnwrap(CardFace.parse("7h"))
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+        let box = CGRect(x: 0.35, y: 0.3, width: 0.2, height: 0.3)
+
+        func detection(_ card: CardFace) -> CardDetection {
+            CardDetection(card: card, confidence: 0.76, boundingBox: box)
+        }
+
+        XCTAssertTrue(coordinator.process([detection(aceHearts)], at: start).isEmpty)
+        XCTAssertEqual(coordinator.process([detection(aceHearts)], at: start.addingTimeInterval(0.04)).count, 1)
+
+        // The next physical card follows the same centre path shortly after
+        // the first one. It must get a fresh track and a second record.
+        XCTAssertTrue(coordinator.process([detection(sevenHearts)], at: start.addingTimeInterval(0.20)).isEmpty)
+        XCTAssertEqual(coordinator.process([detection(sevenHearts)], at: start.addingTimeInterval(0.24)).count, 1)
+    }
+
+    func testLowConfidenceAndInvalidBoxesAreIgnored() throws {
+        let coordinator = CardEventCoordinator()
+        let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+
+        let low = CardDetection(
+            card: aceHearts,
+            confidence: 0.2,
+            boundingBox: CGRect(x: 0.2, y: 0.2, width: 0.4, height: 0.5)
         )
+        let invalid = CardDetection(
+            card: aceHearts,
+            confidence: 0.9,
+            boundingBox: CGRect(x: .infinity, y: 0, width: 0.2, height: 0.3)
+        )
+
+        XCTAssertTrue(coordinator.process([low, invalid], at: start).isEmpty)
+        XCTAssertTrue(coordinator.process([], at: start.addingTimeInterval(0.04)).isEmpty)
+    }
+
+    func testFastMovingBoxStaysOnOneTrack() throws {
+        let coordinator = CardEventCoordinator()
+        let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+
+        func detection(x: CGFloat) -> CardDetection {
+            CardDetection(
+                card: aceHearts,
+                confidence: 0.74,
+                boundingBox: CGRect(x: x, y: 0.3, width: 0.16, height: 0.26)
+            )
+        }
+
+        XCTAssertTrue(coordinator.process([detection(x: 0.02)], at: start).isEmpty)
+        XCTAssertEqual(coordinator.process([detection(x: 0.34)], at: start.addingTimeInterval(0.04)).count, 1)
+        XCTAssertTrue(coordinator.process([detection(x: 0.66)], at: start.addingTimeInterval(0.08)).isEmpty)
     }
 
     func testSameFaceIsNotRecordedAgainAfterThePreviousTrackLeaves() throws {

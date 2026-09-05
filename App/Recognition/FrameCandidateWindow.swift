@@ -14,7 +14,11 @@ struct FrameCandidateWindow {
     let recencySharpnessRatio: Double
 
     init(
-        maximumAge: TimeInterval = 0.075,
+        // Keep a slightly wider window at high capture rates.  The selected
+        // frame is still recent, but a busy Core ML request should not make a
+        // fast-moving card disappear simply because the sharp sample was a
+        // few milliseconds older.
+        maximumAge: TimeInterval = 0.10,
         recencySharpnessRatio: Double = 0.72
     ) {
         self.maximumAge = maximumAge

@@ -137,37 +137,39 @@ final class CameraService: NSObject {
 
     @discardableResult
     private func configureBestFrameRate(for camera: AVCaptureDevice) -> Int {
-        let formats = camera.formats
-
-        let exact1080At240 = formats.first { format in
-            hasDimensions(format, width: 1920, height: 1080) && supports(frameRate: 240, in: format)
+        // A high frame rate is useful only if the card still has enough
+        // pixels to read. Some iPhones expose 240 fps at 720p as well as
+        // 1080p; prefer the 1080p family first, then choose its fastest mode.
+        // Only fall back to another resolution when no 1080p high-speed mode
+        // exists. This avoids accidentally selecting a 4K/60 format (large but
+        // slower) or a very soft 720p/240 format on a fast-deal setup.
+        let desiredRates = [240, 120, 60]
+        let formats = camera.formats.compactMap { format -> (format: AVCaptureDevice.Format, width: Int32, height: Int32, rate: Int)? in
+            let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            guard let rate = desiredRates.first(where: { supports(frameRate: Double($0), in: format) }) else {
+                return nil
+            }
+            return (format, dimensions.width, dimensions.height, rate)
         }
-        let anyAt240 = formats.first { supports(frameRate: 240, in: $0) }
-        let exact1080At120 = formats.first { format in
-            hasDimensions(format, width: 1920, height: 1080) && supports(frameRate: 120, in: format)
+        let preferredFormats = formats.filter {
+            hasDimensions($0.format, width: 1920, height: 1080)
         }
-        let anyAt120 = formats.first { supports(frameRate: 120, in: $0) }
-        let exact1080At60 = formats.first { format in
-            hasDimensions(format, width: 1920, height: 1080) && supports(frameRate: 60, in: format)
-        }
-        let anyAt60 = formats.first { supports(frameRate: 60, in: $0) }
-        let selected: (format: AVCaptureDevice.Format, frameRate: Int)?
-        if let format = exact1080At240 ?? anyAt240 {
-            selected = (format, 240)
-        } else if let format = exact1080At120 ?? anyAt120 {
-            selected = (format, 120)
-        } else if let format = exact1080At60 ?? anyAt60 {
-            selected = (format, 60)
-        } else {
-            selected = nil
-        }
+        let selectionPool = preferredFormats.isEmpty ? formats : preferredFormats
+        let selected = selectionPool
+            .sorted { lhs, rhs in
+                if lhs.rate != rhs.rate { return lhs.rate > rhs.rate }
+                let lhsArea = Int64(lhs.width) * Int64(lhs.height)
+                let rhsArea = Int64(rhs.width) * Int64(rhs.height)
+                return lhsArea > rhsArea
+            }
+            .first
 
         do {
             try camera.lockForConfiguration()
             defer { camera.unlockForConfiguration() }
             if let selected {
                 camera.activeFormat = selected.format
-                let duration = CMTime(value: 1, timescale: CMTimeScale(selected.frameRate))
+                let duration = CMTime(value: 1, timescale: CMTimeScale(selected.rate))
                 camera.activeVideoMinFrameDuration = duration
                 camera.activeVideoMaxFrameDuration = duration
             }
@@ -184,7 +186,7 @@ final class CameraService: NSObject {
                 camera.autoFocusRangeRestriction = .near
             }
             if let selected {
-                return selected.frameRate
+                return selected.rate
             }
         } catch {
             return 30
