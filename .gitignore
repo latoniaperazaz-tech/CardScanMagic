@@ -1,0 +1,8 @@
+.DS_Store
+.venv/
+__pycache__/
+build/
+CardScanMagic.xcodeproj/
+App/Models/CardDetector.mlpackage/
+App/Models/CardDetector.mlmodelc/
+App/Models/CardDetectorInfo.json
