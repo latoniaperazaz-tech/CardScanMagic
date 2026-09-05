@@ -1,0 +1,71 @@
+name: Build unsigned iPhone test app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Export model and package IPA
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up the Core ML export tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install -r scripts/requirements-export.txt
+
+      - name: Download and export the card model
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .venv/bin/activate
+          python scripts/export_coreml.py --download
+
+      - name: Generate the Xcode project
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen generate
+
+      - name: Build an unsigned device app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project CardScanMagic.xcodeproj \
+            -scheme CardScanMagic \
+            -configuration Debug \
+            -sdk iphoneos \
+            -derivedDataPath "$PWD/build/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+          app_path="$PWD/build/DerivedData/Build/Products/Debug-iphoneos/CardScanMagic.app"
+          test -d "$app_path"
+          mkdir -p build/Payload
+          cp -R "$app_path" build/Payload/
+          ditto -c -k --sequesterRsrc --keepParent build/Payload build/CardScanMagic-unsigned.ipa
+
+      - name: Upload the unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: CardScanMagic-unsigned-ipa
+          path: build/CardScanMagic-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
