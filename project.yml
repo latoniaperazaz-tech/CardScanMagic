@@ -43,3 +43,12 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/CardScanMagic.app/CardScanMagic"
         BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  CardScanMagic:
+    build:
+      targets:
+        CardScanMagic: all
+        CardScanMagicTests: [test]
+    test:
+      targets:
+        - CardScanMagicTests

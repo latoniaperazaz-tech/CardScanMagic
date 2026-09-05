@@ -23,16 +23,19 @@ final class CardEventCoordinator {
 
     private var tracks: [Track] = []
     private var recentRecords: [RecentRecord] = []
+    private var recordedCards = Set<CardFace>()
 
     private let confirmationWindow = 3
     private let requiredMatchingVotes = 2
-    private let confidenceThreshold: Float = 0.62
-    private let trackTimeout: TimeInterval = 0.45
+    private let confidenceThreshold: Float = 0.55
+    private let fastPathConfidence: Float = 0.88
+    private let trackTimeout: TimeInterval = 0.55
     private let duplicateGuard: TimeInterval = 0.65
 
     func reset() {
         tracks.removeAll()
         recentRecords.removeAll()
+        recordedCards.removeAll()
     }
 
     func process(_ detections: [CardDetection], at date: Date) -> [CardRecord] {
@@ -63,11 +66,13 @@ final class CardEventCoordinator {
         var records: [CardRecord] = []
         for index in tracks.indices where !tracks[index].wasRecorded {
             guard let stableCard = stableCard(in: tracks[index].votes),
+                  !recordedCards.contains(stableCard.card),
                   !hasRecentlyRecorded(stableCard.card, at: date) else {
                 continue
             }
 
             tracks[index].wasRecorded = true
+            recordedCards.insert(stableCard.card)
             recentRecords.append(RecentRecord(card: stableCard.card, date: date))
             records.append(
                 CardRecord(card: stableCard.card, confidence: stableCard.confidence, recordedAt: date)
@@ -92,7 +97,7 @@ final class CardEventCoordinator {
 
             let overlap = track.box.intersectionOverUnion(with: detection.boundingBox)
             let centerDistance = track.box.normalizedCenterDistance(to: detection.boundingBox)
-            guard overlap >= 0.06 || centerDistance <= 0.18 else { continue }
+            guard overlap >= 0.06 || centerDistance <= 0.24 else { continue }
 
             let score = overlap - (centerDistance * 0.25)
             if best == nil || score > best!.score {
@@ -103,6 +108,9 @@ final class CardEventCoordinator {
     }
 
     private func stableCard(in votes: [Vote]) -> (card: CardFace, confidence: Float)? {
+        if let latest = votes.last, latest.confidence >= fastPathConfidence {
+            return (latest.label, latest.confidence)
+        }
         guard votes.count >= requiredMatchingVotes else { return nil }
 
         let grouped = Dictionary(grouping: votes, by: \.label)

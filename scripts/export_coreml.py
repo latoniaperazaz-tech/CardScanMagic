@@ -37,7 +37,10 @@ def parse_args() -> argparse.Namespace:
         help="Destination Core ML package. The destination must not already exist.",
     )
     parser.add_argument("--image-size", type=int, default=640)
-    parser.add_argument("--confidence", type=float, default=0.62)
+    # Keep lower-confidence candidates so the Swift tracker can confirm them
+    # across multiple sharp frames instead of dropping motion-blurred cards
+    # before tracking gets a chance to stabilize them.
+    parser.add_argument("--confidence", type=float, default=0.45)
     parser.add_argument("--iou", type=float, default=0.45)
     parser.add_argument(
         "--no-fp16",

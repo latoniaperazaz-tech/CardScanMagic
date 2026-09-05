@@ -1,50 +1,96 @@
 import CoreVideo
 import Foundation
 
-/// Keeps the clearest luma frame in each short time window before Core ML runs.
+/// Samples a high-frame-rate camera stream without making Core ML compete for
+/// every frame. The most recent sufficiently sharp frame wins a short window.
 final class SharpFrameSampler {
-    private struct Candidate {
+    private struct CandidateBuffer {
         let pixelBuffer: CVPixelBuffer
         let timestamp: TimeInterval
-        let sharpness: Double
     }
 
-    private let interval: TimeInterval
+    private let inferenceInterval: TimeInterval
+    private let qualityInterval: TimeInterval
     private let stateLock = NSLock()
     private var nextInferenceTime: TimeInterval = 0
-    private var bestCandidate: Candidate?
+    private var nextQualityTime: TimeInterval = 0
+    private var candidateWindow = FrameCandidateWindow()
+    private var candidateBuffer: CandidateBuffer?
+    private var revision: UInt64 = 0
 
-    init(maximumInferencesPerSecond: Double = 14) {
-        interval = 1 / maximumInferencesPerSecond
+    init(
+        maximumInferencesPerSecond: Double = 18,
+        maximumQualitySamplesPerSecond: Double = 80
+    ) {
+        inferenceInterval = 1 / maximumInferencesPerSecond
+        qualityInterval = 1 / maximumQualitySamplesPerSecond
     }
 
-    func select(pixelBuffer: CVPixelBuffer, timestamp: TimeInterval) -> (CVPixelBuffer, TimeInterval)? {
-        stateLock.lock()
-        defer { stateLock.unlock() }
+    /// Returns at most one recent frame at the requested inference rate. Frame
+    /// sharpness is calculated outside the lock so a reset can immediately
+    /// discard a measurement that is still being calculated.
+    func select(
+        pixelBuffer: CVPixelBuffer,
+        timestamp: TimeInterval,
+        allowsInference: Bool
+    ) -> (CVPixelBuffer, TimeInterval)? {
+        guard timestamp.isFinite else { return nil }
 
-        let sharpness = FrameQuality.sharpness(of: pixelBuffer)
-        if timestamp < nextInferenceTime {
-            if bestCandidate == nil || sharpness > bestCandidate!.sharpness {
-                bestCandidate = Candidate(pixelBuffer: pixelBuffer, timestamp: timestamp, sharpness: sharpness)
+        stateLock.lock()
+        let currentRevision = revision
+        let shouldMeasureQuality = timestamp >= nextQualityTime
+        if shouldMeasureQuality {
+            nextQualityTime = timestamp + qualityInterval
+        }
+        stateLock.unlock()
+
+        if shouldMeasureQuality {
+            let sharpness = FrameQuality.sharpness(of: pixelBuffer)
+
+            stateLock.lock()
+            guard revision == currentRevision else {
+                stateLock.unlock()
+                return nil
             }
-            return nil
+
+            if candidateWindow.insert(timestamp: timestamp, sharpness: sharpness) {
+                candidateBuffer = CandidateBuffer(pixelBuffer: pixelBuffer, timestamp: timestamp)
+            }
+            let selected = takeCandidateIfReady(at: timestamp, allowsInference: allowsInference)
+            stateLock.unlock()
+            return selected
         }
 
-        let selected = bestCandidate ?? Candidate(
-            pixelBuffer: pixelBuffer,
-            timestamp: timestamp,
-            sharpness: sharpness
-        )
-        bestCandidate = nil
-        nextInferenceTime = timestamp + interval
-        return (selected.pixelBuffer, selected.timestamp)
+        stateLock.lock()
+        let selected = takeCandidateIfReady(at: timestamp, allowsInference: allowsInference)
+        stateLock.unlock()
+        return selected
     }
 
     func reset() {
         stateLock.lock()
+        revision &+= 1
         nextInferenceTime = 0
-        bestCandidate = nil
+        nextQualityTime = 0
+        candidateWindow.reset()
+        candidateBuffer = nil
         stateLock.unlock()
+    }
+
+    private func takeCandidateIfReady(
+        at timestamp: TimeInterval,
+        allowsInference: Bool
+    ) -> (CVPixelBuffer, TimeInterval)? {
+        guard allowsInference, timestamp >= nextInferenceTime,
+              let metadata = candidateWindow.take(at: timestamp),
+              let buffer = candidateBuffer,
+              buffer.timestamp == metadata.timestamp else {
+            return nil
+        }
+
+        candidateBuffer = nil
+        nextInferenceTime = timestamp + inferenceInterval
+        return (buffer.pixelBuffer, metadata.timestamp)
     }
 }
 
@@ -63,7 +109,9 @@ private enum FrameQuality {
         let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
         guard width > 16, height > 16 else { return 0 }
 
-        let step = max(8, min(width, height) / 64)
+        // A coarse luma grid is enough to reject motion blur and avoids doing
+        // 240 full-frame quality passes per second on the camera queue.
+        let step = max(8, min(width, height) / 42)
         var total: Double = 0
         var samples = 0
         for y in stride(from: step, to: height - step, by: step) {

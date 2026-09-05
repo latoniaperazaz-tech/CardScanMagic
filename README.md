@@ -10,16 +10,16 @@ network connection while scanning.
 
 ## What the first version does
 
-- Requests the rear camera and attempts 1920x1080 at 120 fps; it falls back to
-  60 fps when that exact camera format is unavailable.
+- Requests the rear camera and prefers 1920x1080 at 240 fps for fast dealing;
+  it falls back to 120 fps, then 60 fps when needed.
 - Samples the high-frame-rate stream, retaining a sharp candidate frame instead
-  of trying to run the neural model on all 120 frames.
+  of trying to run the neural model on all 240 frames.
 - Detects cards anywhere in the frame, tracks their position, and records a
-  card only after two consistent recognitions.
+  card on one very high-confidence recognition or two consistent recognitions.
 - Keeps the complete detection history until the `Clear` button is tapped.
-- Requires a card to leave the view before its same track can be recorded
-  again. A short duplicate guard also prevents one fast-moving card from being
-  appended twice when tracking is briefly interrupted.
+- Records each exact card only once per scan session, even if tracking briefly
+  loses it and redetects it. Different cards with the same suit are still
+  recorded separately. Clear the history to start a fresh deck/session.
 
 ## Before building
 

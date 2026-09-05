@@ -96,10 +96,10 @@ final class CameraService: NSObject {
         let input = try AVCaptureDeviceInput(device: camera)
         let output = AVCaptureVideoDataOutput()
         output.alwaysDiscardsLateVideoFrames = true
+        output.setSampleBufferDelegate(self, queue: outputQueue)
         output.videoSettings = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
         ]
-        output.setSampleBufferDelegate(self, queue: outputQueue)
 
         session.beginConfiguration()
         var wasConfigured = false
@@ -139,6 +139,10 @@ final class CameraService: NSObject {
     private func configureBestFrameRate(for camera: AVCaptureDevice) -> Int {
         let formats = camera.formats
 
+        let exact1080At240 = formats.first { format in
+            hasDimensions(format, width: 1920, height: 1080) && supports(frameRate: 240, in: format)
+        }
+        let anyAt240 = formats.first { supports(frameRate: 240, in: $0) }
         let exact1080At120 = formats.first { format in
             hasDimensions(format, width: 1920, height: 1080) && supports(frameRate: 120, in: format)
         }
@@ -148,7 +152,9 @@ final class CameraService: NSObject {
         }
         let anyAt60 = formats.first { supports(frameRate: 60, in: $0) }
         let selected: (format: AVCaptureDevice.Format, frameRate: Int)?
-        if let format = exact1080At120 ?? anyAt120 {
+        if let format = exact1080At240 ?? anyAt240 {
+            selected = (format, 240)
+        } else if let format = exact1080At120 ?? anyAt120 {
             selected = (format, 120)
         } else if let format = exact1080At60 ?? anyAt60 {
             selected = (format, 60)
@@ -164,6 +170,20 @@ final class CameraService: NSObject {
                 let duration = CMTime(value: 1, timescale: CMTimeScale(selected.frameRate))
                 camera.activeVideoMinFrameDuration = duration
                 camera.activeVideoMaxFrameDuration = duration
+            }
+            if camera.isFocusModeSupported(.continuousAutoFocus) {
+                camera.focusMode = .continuousAutoFocus
+            }
+            if camera.isExposureModeSupported(.continuousAutoExposure) {
+                camera.exposureMode = .continuousAutoExposure
+            }
+            if camera.isSmoothAutoFocusSupported {
+                camera.isSmoothAutoFocusEnabled = false
+            }
+            if camera.isAutoFocusRangeRestrictionSupported {
+                camera.autoFocusRangeRestriction = .near
+            }
+            if let selected {
                 return selected.frameRate
             }
         } catch {

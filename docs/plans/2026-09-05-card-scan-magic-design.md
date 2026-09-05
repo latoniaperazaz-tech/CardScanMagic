@@ -19,18 +19,19 @@ performer turns the phone over after dealing.
 ## Architecture
 
 ```text
-Rear camera (1080p, 120 fps preferred)
-  -> sharp-frame sampler (about 14 model inputs/sec)
+Rear camera (1080p, 240 fps preferred)
+  -> sharp-frame sampler (at most 18 model inputs/sec)
   -> Core ML object detector, entirely on the phone
   -> position-aware card event coordinator
   -> persistent SwiftUI card history
 ```
 
 `CameraService` chooses the fastest 1920x1080 back-camera format that supports
-120 fps. If unavailable, it chooses a 60 fps format. `SharpFrameSampler`
+240 fps, then falls back to 120 fps and 60 fps. `SharpFrameSampler`
 measures luma-edge contrast on the inexpensive camera luma plane and retains
-the clearest frame from each sampling interval. This avoids queuing 120 neural
-inferences per second.
+the clearest frame from each sampling interval. It keeps collecting while the
+previous inference runs, so a short card pass is not lost to a busy model. This
+avoids queuing 240 neural inferences per second.
 
 `RecognitionEngine` loads `CardDetector.mlmodelc` from the application bundle
 and submits selected frames through Vision/Core ML. The export script produces
@@ -39,11 +40,11 @@ enabled, so Vision returns labelled card boxes. Vision uses aspect-fit scaling,
 which keeps the whole camera image in scope instead of cropping it to a square.
 
 `CardEventCoordinator` matches detection boxes across frames by overlap and
-nearby centre position. It requires the same label in two of the three latest
-detections and a mean confidence of at least 0.62 before emitting a record. A
-track is then marked recorded until it has disappeared. A 0.65 second
-same-label guard avoids duplicated records if a very fast card briefly breaks
-tracking; a later physical card with the same face may still be recorded.
+nearby centre position. A very high-confidence detection is recorded at once;
+other results require the same label in two of the three latest detections and
+a mean confidence of at least 0.55. Each exact card face is recorded only once
+per scan session, which prevents repeated entries if a fast pass briefly loses
+tracking. Different ranks with the same suit are separate cards.
 
 ## Failure behavior
 
@@ -54,7 +55,7 @@ tracking; a later physical card with the same face may still be recorded.
   problem with a usable status message.
 - Dark, blurry, reflective, or low-confidence frames: they are ignored rather
   than written as incorrect cards.
-- Camera mode less capable than 120 fps: scanning continues at 60 fps.
+- Camera mode less capable than 240 fps: scanning continues at 120 fps or 60 fps.
 
 ## Validation
 
