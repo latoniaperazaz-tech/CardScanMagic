@@ -3,7 +3,8 @@ options:
   bundleIdPrefix: com.example
   # The GitHub macOS 14 image builds with Xcode 15.4. Pin the generated
   # project format so a newer XcodeGen release does not emit Xcode 16 files.
-  xcodeVersion: "15.0"`n  projectFormat: "xcode15_0"
+  xcodeVersion: "15.0"
+  projectFormat: "xcode15_0"
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
