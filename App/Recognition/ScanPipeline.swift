@@ -23,7 +23,7 @@ final class ScanPipeline {
     /// with inference and are idempotent, so multiple start requests cannot
     /// create multiple engines.
     func prepare() async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             processingQueue.async { [weak self] in
                 guard let self else {
                     continuation.resume(throwing: CancellationError())
