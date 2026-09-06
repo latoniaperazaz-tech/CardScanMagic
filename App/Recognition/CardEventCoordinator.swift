@@ -55,16 +55,19 @@ final class CardEventCoordinator {
     private var recordedCards = Set<CardFace>()
     private var lastTimestamp: Date?
 
-    // The upstream model is strong on a clear, fully visible card. It is much
-    // less trustworthy on a thin slice of a card, table texture, glare, or a
-    // motion-blurred corner. Reject those before they can affect a track.
-    private let minimumDetectionConfidence: Float = 0.78
-    private let minimumConfirmedConfidence: Float = 0.85
-    private let minimumBoxArea: CGFloat = 0.014
-    private let minimumVisibleFraction: CGFloat = 0.78
-    private let minimumShortSide: CGFloat = 0.070
-    private let minimumShortSidePixels: CGFloat = 64
-    private let minimumShortToLongAspect: CGFloat = 0.42
+    // The upstream model detects the rank/suit printed in a card corner, not
+    // the outline of the whole physical card. Those corner boxes are often
+    // only 0.002 of the image area and can be very narrow (especially for a
+    // suit symbol), so full-card geometry thresholds discard every result.
+    // Keep a modest per-frame confidence gate here; the two-frame vote below
+    // remains the main protection against blur and table-texture false hits.
+    private let minimumDetectionConfidence: Float = 0.52
+    private let minimumConfirmedConfidence: Float = 0.60
+    private let minimumBoxArea: CGFloat = 0.0007
+    private let minimumVisibleFraction: CGFloat = 0.50
+    private let minimumShortSide: CGFloat = 0.015
+    private let minimumShortSidePixels: CGFloat = 18
+    private let minimumShortToLongAspect: CGFloat = 0.20
     private let confirmationWindow = 4
     private let requiredMatchingVotes = 2
     private let trackTimeout: TimeInterval = 0.24
@@ -163,7 +166,16 @@ final class CardEventCoordinator {
         }
         .sorted { $0.confidence > $1.confidence }
 
-        return CardEventUpdate(records: records, stableDetections: stableDetections)
+        // A single physical card can expose two corners at once. Since the
+        // detector classifies corner snippets, that produces two stable tracks
+        // with the same CardFace. Keep the strongest one for the overlay so
+        // the UI shows one badge per card instead of flickering duplicates.
+        var displayedCards = Set<CardFace>()
+        let uniqueStableDetections = stableDetections.filter { detection in
+            displayedCards.insert(detection.card).inserted
+        }
+
+        return CardEventUpdate(records: records, stableDetections: uniqueStableDetections)
     }
 
     private func sanitizedDetection(_ detection: CardDetection) -> CardDetection? {
@@ -284,11 +296,11 @@ final class CardEventCoordinator {
                 // fast pass. Only allow this wider bridge immediately after
                 // the first sample, with the same label and a similar box.
                 guard age <= initialLinkWindow else { continue }
-                distanceGate = min(0.38, max(0.14, track.box.diagonal * 1.20 + 0.06))
+                distanceGate = min(0.45, max(0.20, track.box.diagonal * 1.80 + 0.08))
             } else {
-                let predictedDistance = track.box.diagonal * 0.76
+                let predictedDistance = track.box.diagonal * 0.95
                     + track.velocity.magnitude * predictionAge * 1.20 + 0.045
-                distanceGate = min(0.34, max(0.12, predictedDistance))
+                distanceGate = min(0.42, max(0.18, predictedDistance))
             }
 
             guard overlap >= minimumOverlap || centerDistance <= distanceGate else { continue }

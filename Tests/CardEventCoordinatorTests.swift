@@ -177,4 +177,51 @@ final class CardEventCoordinatorTests: XCTestCase {
         XCTAssertEqual(second.stableDetections.map(\.card), [aceHearts])
     }
 
+    func testCardCornerDetectionIsAcceptedAndConfirmed() throws {
+        let coordinator = CardEventCoordinator()
+        let sevenDiamonds = try XCTUnwrap(CardFace.parse("7d"))
+        // The upstream model returns a small rank/suit corner box rather than
+        // a rectangle around the whole physical card.
+        let detection = CardDetection(
+            card: sevenDiamonds,
+            confidence: 0.70,
+            boundingBox: CGRect(x: 0.55, y: 0.25, width: 0.04, height: 0.06)
+        )
+        let start = Date(timeIntervalSinceReferenceDate: 300)
+
+        let first = coordinator.processUpdate([detection], at: start)
+        XCTAssertTrue(first.records.isEmpty)
+        XCTAssertTrue(first.stableDetections.isEmpty)
+
+        let second = coordinator.processUpdate(
+            [detection],
+            at: start.addingTimeInterval(0.04)
+        )
+        XCTAssertEqual(second.records.map(\.card), [sevenDiamonds])
+        XCTAssertEqual(second.stableDetections.map(\.card), [sevenDiamonds])
+    }
+
+    func testTwoStableCornerBoxesForOneFaceProduceOneOverlayAndRecord() throws {
+        let coordinator = CardEventCoordinator()
+        let fourClubs = try XCTUnwrap(CardFace.parse("4c"))
+        let leftBox = CGRect(x: 0.15, y: 0.20, width: 0.04, height: 0.06)
+        let rightBox = CGRect(x: 0.75, y: 0.20, width: 0.04, height: 0.06)
+        let detections = [
+            CardDetection(card: fourClubs, confidence: 0.72, boundingBox: leftBox),
+            CardDetection(card: fourClubs, confidence: 0.70, boundingBox: rightBox)
+        ]
+        let start = Date(timeIntervalSinceReferenceDate: 400)
+
+        XCTAssertTrue(coordinator.processUpdate(detections, at: start).records.isEmpty)
+        let second = coordinator.processUpdate(
+            detections,
+            at: start.addingTimeInterval(0.04)
+        )
+
+        // A card can expose both its rank and suit corners. They are separate
+        // tracks internally, but must not become duplicate UI/history entries.
+        XCTAssertEqual(second.records.map(\.card), [fourClubs])
+        XCTAssertEqual(second.stableDetections.map(\.card), [fourClubs])
+    }
+
 }
