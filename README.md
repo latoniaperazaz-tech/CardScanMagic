@@ -3,12 +3,16 @@
 An iPhone app for recording face-up playing cards as they pass anywhere through
 the rear camera view. It is designed for an iPhone placed screen-down on a
 table: start scanning while the screen is visible, turn the phone over, deal
-the cards, then turn it back to see the cumulative card history.
+the three cards, then turn it back to see the hand.
 
 The app runs recognition locally. It does not upload camera frames or require a
 network connection while scanning.
 
 ## What the first version does
+
+The app is currently tuned for one 炸金花 hand: it accepts at most three unique
+cards per round. After the third confirmed card it stops the camera automatically
+and keeps the three-card result on screen. Tap Clear before the next hand.
 
 - Requests the rear camera and prefers a clear 1920x1080 stream. It uses 120
   fps by default, then 60 fps if the device does not expose a suitable 120 fps
@@ -20,10 +24,10 @@ network connection while scanning.
 - Detects cards anywhere in the frame, tracks their position and velocity, and
   records a card after two consistent, high-confidence recognitions. A
   motion-blurred one-frame label is never shown or written to the history.
-- Keeps the complete detection history until the `Clear` button is tapped.
-- Records each exact card only once per scan session, even if tracking briefly
-  loses it and redetects it. Different cards with the same suit are still
-  recorded separately. Clear the history to start a fresh deck/session.
+- Keeps up to three unique cards in deal order. A duplicate callback or a
+  re-detection cannot consume another slot.
+- Stops after the third card so table texture and later cards cannot pollute
+  the hand. Tap Clear to start the next three-card hand.
 
 ## Before building
 
@@ -86,8 +90,8 @@ See [`Windows免费安装到iPhone.md`](Windows免费安装到iPhone.md) for the
 2. Place the iPhone screen-down so the rear camera faces up.
 3. Deal face-up cards over the camera with strong, diffuse light from both
    sides. The cards must be readable in at least a few video frames.
-4. Turn the phone over. The list should contain each recognized card in deal
-   order.
+4. Turn the phone over. The list should contain the recognized cards in deal
+   order (up to three), then show that the hand is complete.
 
 Start with one card at a time. Do not judge the model by its first result under
 uncontrolled lighting: glare, motion blur, and a card held edge-on are camera

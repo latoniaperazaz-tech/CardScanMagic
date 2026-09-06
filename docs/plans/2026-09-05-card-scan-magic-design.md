@@ -4,7 +4,8 @@
 
 Record the identity and deal order of face-up playing cards passing over an
 iPhone 14 Pro placed screen-down on a table. The result is viewed when the
-performer turns the phone over after dealing.
+performer turns the phone over after dealing. The target routine is 炸金花,
+so one scan session represents one three-card hand.
 
 ## Agreed interaction
 
@@ -12,6 +13,8 @@ performer turns the phone over after dealing.
 - Any position in the camera view is valid. There is no fixed scanning box.
 - Each physical card should be added only once while it remains visible.
 - The recognized-card list remains on screen and accumulates in deal order.
+- A hand contains at most three unique cards. Once the third card is confirmed,
+  capture stops automatically; `Clear` starts the next hand.
 - The performer later turns the phone over and views the list.
 - First-version output is only the on-phone list. It has a `Clear` command for
   the next routine.
@@ -49,6 +52,8 @@ observations in a four-frame vote with an average confidence of at least 0.85.
 Each exact card face is recorded only once per scan session, and a short
 spatial/trajectory guard suppresses a duplicate when a fast pass briefly loses
 tracking. Different ranks with the same suit are separate cards.
+The view model applies the three-card hand limit at the UI/session boundary as a
+final guard against duplicate or queued callbacks.
 
 ## Failure behavior
 

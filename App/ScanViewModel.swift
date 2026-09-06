@@ -4,10 +4,16 @@ import UIKit
 
 @MainActor
 final class ScanViewModel: ObservableObject {
+    /// This app is used for a three-card 炸金花 deal. Keeping the limit
+    /// in one place prevents a fourth card (or a duplicate callback) from
+    /// leaking into the history while the camera is still shutting down.
+    static let cardsPerRound = 3
+
     @Published private(set) var records: [CardRecord] = []
     @Published private(set) var detections: [CardDetection] = []
     @Published private(set) var isScanning = false
     @Published private(set) var isPreparing = false
+    @Published private(set) var isRoundComplete = false
     @Published private(set) var statusText = "准备就绪"
     @Published var alertMessage: String?
 
@@ -42,7 +48,20 @@ final class ScanViewModel: ObservableObject {
                       self.activeSessionID == sessionID else {
                     return
                 }
-                self.records.append(contentsOf: newRecords)
+
+                // A single model update can contain more than one confirmed
+                // track, and an older queued callback can arrive just as the
+                // third card completes the hand. De-duplicate again at the UI
+                // boundary and take only the remaining slots as a final guard.
+                let uniqueRecords = self.uniqueRecords(from: newRecords)
+                let remaining = max(0, Self.cardsPerRound - self.records.count)
+                if remaining > 0 {
+                    self.records.append(contentsOf: uniqueRecords.prefix(remaining))
+                }
+
+                if self.records.count >= Self.cardsPerRound {
+                    self.completeRound()
+                }
             }
         }
         pipeline.onDetections = { [weak self] sessionID, newDetections in
@@ -50,6 +69,11 @@ final class ScanViewModel: ObservableObject {
                 guard let self,
                       self.isScanning,
                       self.activeSessionID == sessionID else {
+                    return
+                }
+                guard !self.isRoundComplete,
+                      self.records.count < Self.cardsPerRound else {
+                    self.detections = []
                     return
                 }
                 self.detections = newDetections
@@ -66,7 +90,14 @@ final class ScanViewModel: ObservableObject {
     func startScanning() {
         guard !isScanning, !isPreparing else { return }
 
+        guard records.count < Self.cardsPerRound else {
+            isRoundComplete = true
+            statusText = "本轮已完成 · 请先清空"
+            return
+        }
+
         isPreparing = true
+        isRoundComplete = false
         statusText = "正在准备识别"
         startRequestID &+= 1
         let requestID = startRequestID
@@ -109,12 +140,17 @@ final class ScanViewModel: ObservableObject {
         isPreparing = false
         isScanning = false
         detections = []
-        statusText = "已暂停"
+        isRoundComplete = false
+        statusText = records.isEmpty
+            ? "已暂停"
+            : "已暂停 · \(records.count)/\(Self.cardsPerRound) 张"
     }
 
     func clearRecords() {
         records.removeAll()
         detections = []
+        isRoundComplete = false
+        statusText = isScanning ? "扫描中 · 等待发牌" : "准备下一手"
 
         if let sessionID = pipeline.resetRecordedState() {
             // Update this before the asynchronous pipeline callback can reach
@@ -127,6 +163,30 @@ final class ScanViewModel: ObservableObject {
         finishScanning(with: error, status: "无法扫描")
     }
 
+    /// Stops capture as soon as the three-card hand is complete. This avoids
+    /// spending inference time on the table after the hand and makes the
+    /// result deterministic when the performer turns the phone over.
+    private func completeRound() {
+        guard isScanning else { return }
+
+        startRequestID &+= 1
+        activeSessionID = nil
+        pipeline.stop()
+        camera.stop()
+        isPreparing = false
+        isScanning = false
+        detections = []
+        isRoundComplete = true
+        statusText = "已识别 \(Self.cardsPerRound) 张 · 本轮完成"
+    }
+
+    private func uniqueRecords(from incoming: [CardRecord]) -> [CardRecord] {
+        var knownCards = Set(records.map(\.card))
+        return incoming.filter { record in
+            knownCards.insert(record.card).inserted
+        }
+    }
+
     private func finishScanning(with error: Error, status: String) {
         startRequestID &+= 1
         activeSessionID = nil
@@ -135,6 +195,7 @@ final class ScanViewModel: ObservableObject {
         isPreparing = false
         isScanning = false
         detections = []
+        isRoundComplete = false
         statusText = status
         alertMessage = error.localizedDescription
     }

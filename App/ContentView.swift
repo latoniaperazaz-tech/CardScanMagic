@@ -84,16 +84,30 @@ struct ContentView: View {
             statusReadout
 
             topControl(
-                systemImage: viewModel.isPreparing ? "hourglass" : (viewModel.isScanning ? "pause.fill" : "play.fill"),
-                tint: viewModel.isPreparing ? Color.gray : (viewModel.isScanning ? Color.orange : Color.green),
+                systemImage: viewModel.isPreparing
+                    ? "hourglass"
+                    : (viewModel.isScanning
+                        ? "pause.fill"
+                        : (viewModel.isRoundComplete ? "checkmark.circle.fill" : "play.fill")),
+                tint: viewModel.isPreparing
+                    ? Color.gray
+                    : (viewModel.isScanning
+                        ? Color.orange
+                        : (viewModel.isRoundComplete ? Color.blue : Color.green)),
                 foreground: .black,
-                accessibilityLabel: viewModel.isPreparing ? "正在准备识别" : (viewModel.isScanning ? "暂停扫描" : "继续扫描"),
+                accessibilityLabel: viewModel.isPreparing
+                    ? "正在准备识别"
+                    : (viewModel.isScanning
+                        ? "暂停扫描"
+                        : (viewModel.isRoundComplete
+                            ? "本轮已完成，请先清空记录"
+                            : "继续扫描")),
                 action: {
                     viewModel.isScanning ? viewModel.stopScanning() : viewModel.startScanning()
                 }
             )
-            .disabled(viewModel.isPreparing)
-            .opacity(viewModel.isPreparing ? 0.58 : 1)
+            .disabled(viewModel.isPreparing || viewModel.isRoundComplete)
+            .opacity(viewModel.isPreparing || viewModel.isRoundComplete ? 0.58 : 1)
         }
         .padding(.horizontal, 16)
         .foregroundStyle(.white)
@@ -101,7 +115,7 @@ struct ContentView: View {
 
     private var statusReadout: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("发牌扫描")
+            Text("炸金花 · 三张牌")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.74))
 
@@ -163,7 +177,7 @@ struct ContentView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded ? "收起发牌记录" : "展开全部发牌记录")
+                .accessibilityLabel(isExpanded ? "收起三张牌记录" : "展开三张牌记录")
                 .accessibilityHint("双击可切换记录面板")
             } else {
                 VStack(spacing: 0) {
@@ -171,7 +185,7 @@ struct ContentView: View {
                     drawerSummary(isExpanded: true, isInteractable: false)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("扫描已暂停，正在显示全部发牌记录")
+                .accessibilityLabel("扫描已暂停，正在显示本手三张牌记录")
             }
 
             if isExpanded {
@@ -220,20 +234,20 @@ struct ContentView: View {
     private func drawerSummary(isExpanded: Bool, isInteractable: Bool) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("本轮发牌")
+                Text("本手牌（最多三张）")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
 
-                Text("\(viewModel.records.count) 张")
+                Text("\(viewModel.records.count)/\(ScanViewModel.cardsPerRound) 张")
                     .font(.title3.monospacedDigit().weight(.bold))
                     .contentTransition(.numericText())
             }
-            .frame(width: 72, alignment: .leading)
+            .frame(width: 112, alignment: .leading)
 
             if let latestRecord = viewModel.records.last {
                 LatestCardSummary(record: latestRecord)
             } else {
-                Text("等待第一张牌")
+                Text("等待发牌（最多三张）")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
