@@ -46,12 +46,15 @@ this model from the `cdpcre/french_cards_detector_pytorch` weight with NMS
 enabled, so Vision returns labelled card boxes. Vision uses aspect-fit scaling,
 which keeps the whole camera image in scope instead of cropping it to a square.
 
-`CardEventCoordinator` matches detection boxes across frames by overlap,
-predicted centre position and velocity. Normal results require two consistent
-observations in a four-frame vote with an average confidence of at least 0.85.
-Each exact card face is recorded only once per scan session, and a short
-spatial/trajectory guard suppresses a duplicate when a fast pass briefly loses
-tracking. Different ranks with the same suit are separate cards.
+`CardEventCoordinator` matches the upstream rank/suit corner boxes across frames
+by overlap, predicted centre position and velocity. The upstream model does not
+return a full physical-card outline; its useful boxes are often only about
+0.002 of the image area and can be narrow. The app therefore uses a modest
+per-frame gate, then requires two consistent observations in a four-frame vote
+with an average confidence of at least 0.60. A short spatial/trajectory guard
+suppresses a duplicate when a fast pass briefly loses tracking, and stable UI
+overlays are de-duplicated by exact card face. Different ranks with the same
+suit are separate cards.
 The view model applies the three-card hand limit at the UI/session boundary as a
 final guard against duplicate or queued callbacks.
 
@@ -63,7 +66,8 @@ final guard against duplicate or queued callbacks.
 - Camera permission denied or unavailable: the scan control reports the
   problem with a usable status message.
 - Dark, blurry, reflective, or low-confidence frames: they are ignored rather
-  than written as incorrect cards.
+  than written as incorrect cards; a later sharp frame can confirm the same
+  moving track.
 - Camera mode less capable than 120 fps: scanning continues at 60 fps.
 
 ## Validation

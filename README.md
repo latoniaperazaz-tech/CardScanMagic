@@ -21,9 +21,10 @@ and keeps the three-card result on screen. Tap Clear before the next hand.
   per second.
 - Samples the high-frame-rate stream, retaining a sharp candidate frame instead
   of trying to run the neural model on every camera frame.
-- Detects cards anywhere in the frame, tracks their position and velocity, and
-  records a card after two consistent, high-confidence recognitions. A
-  motion-blurred one-frame label is never shown or written to the history.
+- Detects the rank/suit corner anywhere in the frame, tracks it across time and
+  records a card after two consistent recognitions. The upstream weight returns
+  a small corner box (not a full-card outline), so the app accepts that geometry
+  and uses the surrounding sharp frames to reject one-frame blur or glare.
 - Keeps up to three unique cards in deal order. A duplicate callback or a
   re-detection cannot consume another slot.
 - Stops after the third card so table texture and later cards cannot pollute
@@ -93,9 +94,11 @@ See [`Windows免费安装到iPhone.md`](Windows免费安装到iPhone.md) for the
 4. Turn the phone over. The list should contain the recognized cards in deal
    order (up to three), then show that the hand is complete.
 
-Start with one card at a time. Do not judge the model by its first result under
-uncontrolled lighting: glare, motion blur, and a card held edge-on are camera
-problems before they are model problems.
+Start with one card at a time. The current detector is a corner classifier: it
+can recognize a card even when the whole rectangle is not visible, but a sharp
+rank/suit corner must appear in at least two sampled frames. Glare, motion blur,
+and a card held edge-on are still camera problems; use broad, diffuse light and
+leave a little clearance from the camera frame edge.
 
 ## Model and license note
 
