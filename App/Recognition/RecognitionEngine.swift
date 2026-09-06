@@ -22,7 +22,21 @@ enum RecognitionError: LocalizedError {
 /// full camera frame to the model input and turns its output into labelled
 /// object observations, including the model's `10h`/`As` card labels.
 final class RecognitionEngine {
-    private let request: VNCoreMLRequest
+    private struct RegionRequest {
+        let request: VNCoreMLRequest
+        let region: CGRect
+    }
+
+    private static let fullFrameRegion = CGRect(x: 0, y: 0, width: 1, height: 1)
+    // A 9:16 portrait frame becomes two roughly square model windows when its
+    // height is split. Keep 1/8 of the height overlapped so a corner crossing
+    // the tile boundary is visible in both requests.
+    private static let nearTileSpan: CGFloat = 9.0 / 16.0
+    private static let nearTileOverlap: CGFloat = 1.0 / 8.0
+
+    private let fullFrameRequest: VNCoreMLRequest
+    private let portraitNearRequests: [RegionRequest]
+    private let landscapeNearRequests: [RegionRequest]
 
     init() throws {
         guard let modelURL = Bundle.main.url(forResource: "CardDetector", withExtension: "mlmodelc") else {
@@ -33,10 +47,29 @@ final class RecognitionEngine {
         // makes camera timing steadier on an iPhone 14 Pro.
         configuration.computeUnits = .cpuAndNeuralEngine
         let model = try MLModel(contentsOf: modelURL, configuration: configuration)
-        request = VNCoreMLRequest(model: try VNCoreMLModel(for: model))
+        let visionModel = try VNCoreMLModel(for: model)
+
         // Unlike scale-fill, scale-fit keeps every part of the camera view in
         // scope, which is essential because cards may enter anywhere.
-        request.imageCropAndScaleOption = .scaleFit
+        fullFrameRequest = Self.makeRequest(model: visionModel, region: Self.fullFrameRegion)
+
+        // Keep independent request instances. Mutating one request's ROI while
+        // another Vision request is in flight can otherwise produce stale
+        // regions and mismatched overlay coordinates.
+        let portraitRegions = Self.nearRegions(for: CGSize(width: 1, height: 2))
+        portraitNearRequests = portraitRegions.map {
+            RegionRequest(
+                request: Self.makeRequest(model: visionModel, region: $0),
+                region: $0
+            )
+        }
+        let landscapeRegions = Self.nearRegions(for: CGSize(width: 2, height: 1))
+        landscapeNearRequests = landscapeRegions.map {
+            RegionRequest(
+                request: Self.makeRequest(model: visionModel, region: $0),
+                region: $0
+            )
+        }
     }
 
     func recognize(
@@ -52,8 +85,48 @@ final class RecognitionEngine {
             orientation: orientation
         )
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation)
-        try handler.perform([request])
+        try handler.perform([fullFrameRequest])
 
+        // The full-frame pass is the normal path. A close card can occupy too
+        // few model pixels after scale-fit, so only an actually empty pass
+        // pays for the two magnified fallback requests.
+        let fullFrameDetections = try detections(
+            from: fullFrameRequest,
+            region: nil,
+            orientedImageSize: orientedImageSize
+        )
+        guard fullFrameDetections.isEmpty else { return fullFrameDetections }
+
+        let nearRequests = orientedImageSize.height >= orientedImageSize.width
+            ? portraitNearRequests
+            : landscapeNearRequests
+        guard !nearRequests.isEmpty else { return [] }
+
+        try handler.perform(nearRequests.map(\.request))
+        return try nearRequests.flatMap { regionRequest in
+            try detections(
+                from: regionRequest.request,
+                region: regionRequest.region,
+                orientedImageSize: orientedImageSize
+            )
+        }
+    }
+
+    private static func makeRequest(
+        model: VNCoreMLModel,
+        region: CGRect
+    ) -> VNCoreMLRequest {
+        let request = VNCoreMLRequest(model: model)
+        request.imageCropAndScaleOption = .scaleFit
+        request.regionOfInterest = region
+        return request
+    }
+
+    private func detections(
+        from request: VNCoreMLRequest,
+        region: CGRect?,
+        orientedImageSize: CGSize
+    ) throws -> [CardDetection] {
         guard let observations = request.results as? [VNRecognizedObjectObservation] else {
             throw RecognitionError.modelUnsupported
         }
@@ -63,13 +136,54 @@ final class RecognitionEngine {
                   let card = CardFace.parse(label.identifier) else {
                 return nil
             }
+
+            let boundingBox = region.map {
+                Self.mapBoundingBox(observation.boundingBox, from: $0)
+            } ?? observation.boundingBox
             return CardDetection(
                 card: card,
                 confidence: label.confidence,
-                boundingBox: observation.boundingBox,
+                boundingBox: boundingBox,
                 orientedImageSize: orientedImageSize
             )
         }
+    }
+
+    /// Returns two overlapping normalized regions covering the complete frame.
+    /// Vision's ROI and observation coordinates both use a lower-left origin.
+    static func nearRegions(for imageSize: CGSize) -> [CGRect] {
+        guard imageSize.width.isFinite,
+              imageSize.height.isFinite,
+              imageSize.width > 0,
+              imageSize.height > 0 else {
+            return []
+        }
+
+        if imageSize.height >= imageSize.width {
+            let upperY = nearTileSpan - nearTileOverlap
+            return [
+                CGRect(x: 0, y: 0, width: 1, height: nearTileSpan),
+                CGRect(x: 0, y: upperY, width: 1, height: nearTileSpan)
+            ]
+        }
+
+        let rightX = nearTileSpan - nearTileOverlap
+        return [
+            CGRect(x: 0, y: 0, width: nearTileSpan, height: 1),
+            CGRect(x: rightX, y: 0, width: nearTileSpan, height: 1)
+        ]
+    }
+
+    /// Maps a detection returned in an ROI-local coordinate system to the
+    /// full-image normalized coordinate system used by CardEventCoordinator.
+    static func mapBoundingBox(_ localBox: CGRect, from region: CGRect) -> CGRect {
+        let box = localBox.standardized
+        return CGRect(
+            x: region.minX + box.minX * region.width,
+            y: region.minY + box.minY * region.height,
+            width: box.width * region.width,
+            height: box.height * region.height
+        )
     }
 
     static func orientedImageSize(

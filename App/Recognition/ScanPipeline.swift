@@ -96,6 +96,11 @@ final class ScanPipeline {
             }
 
             do {
+                // RecognitionEngine normally performs one full-frame pass;
+                // its bounded near-card ROI fallback is only activated when
+                // that pass returns no card observations. Keeping this call
+                // inside the single in-flight gate prevents ROI passes from
+                // building a backlog behind later camera frames.
                 let detections = try engine.recognize(
                     pixelBuffer: selectedFrame.0,
                     orientation: selectedFrame.2
