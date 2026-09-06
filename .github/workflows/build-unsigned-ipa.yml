@@ -2,6 +2,29 @@ name: Build unsigned iPhone test app
 
 on:
   workflow_dispatch:
+    inputs:
+      model_source:
+        description: "模型来源：现有模型、ManTou YOLO11s，或外部 Core ML 包"
+        required: true
+        default: cdpcre
+        type: choice
+        options:
+          - cdpcre
+          - mantou-yolo11s
+          - external-coreml
+      external_coreml_url:
+        description: "外部 .mlpackage/.zip 下载地址（选择 external-coreml 时必填）"
+        required: false
+        type: string
+      external_coreml_sha256:
+        description: "可选 SHA-256；填写后会校验下载文件"
+        required: false
+        type: string
+      external_model_id:
+        description: "外部模型标识（仅用于构建元数据）"
+        required: false
+        default: external-model
+        type: string
 
 permissions:
   contents: read
@@ -31,10 +54,57 @@ jobs:
 
       - name: Download and export the card model
         shell: bash
+        env:
+          MODEL_SOURCE: ${{ inputs.model_source }}
+          EXTERNAL_COREML_URL: ${{ inputs.external_coreml_url }}
+          EXTERNAL_COREML_SHA256: ${{ inputs.external_coreml_sha256 }}
+          EXTERNAL_MODEL_ID: ${{ inputs.external_model_id }}
         run: |
           set -euo pipefail
           source .venv/bin/activate
-          python scripts/export_coreml.py --download
+          case "$MODEL_SOURCE" in
+            cdpcre)
+              python scripts/export_coreml.py \
+                --download \
+                --model-id cdpcre-french-cards
+              ;;
+            mantou-yolo11s)
+              # Pin the source revision and hash so a later upstream change
+              # cannot silently change the comparison model.
+              mantou_url="https://raw.githubusercontent.com/ManTou-Tou/poker-card-detection/16b6f7f75dec73ab8e61d76e3927a8260d37bdf4/deploy/cards_yolo11s_best.pt"
+              mantou_sha256="012ed21c4b58d178ebbf8b10e4b06cd4d7b05734b4d7c044246a8db2978d3fd2"
+              mkdir -p models
+              curl --fail --location --retry 3 --silent --show-error \
+                "$mantou_url" \
+                --output models/mantou-yolo11s.pt
+              echo "$mantou_sha256  models/mantou-yolo11s.pt" | shasum -a 256 -c -
+              python scripts/export_coreml.py \
+                --weights models/mantou-yolo11s.pt \
+                --model-id mantou-yolo11s \
+                --image-size 416
+              ;;
+            external-coreml)
+              test -n "$EXTERNAL_COREML_URL" || {
+                echo "external_coreml_url is required for external-coreml" >&2
+                exit 2
+              }
+              curl --fail --location --retry 3 --silent --show-error \
+                "$EXTERNAL_COREML_URL" \
+                --output /tmp/card-detector-external-model
+              if [[ -n "$EXTERNAL_COREML_SHA256" ]]; then
+                echo "$EXTERNAL_COREML_SHA256  /tmp/card-detector-external-model" | shasum -a 256 -c -
+              else
+                echo "Warning: external model SHA-256 was not supplied; review the downloaded artifact before distribution." >&2
+              fi
+              python scripts/export_coreml.py \
+                --coreml-source /tmp/card-detector-external-model \
+                --model-id "$EXTERNAL_MODEL_ID"
+              ;;
+            *)
+              echo "Unsupported model_source: $MODEL_SOURCE" >&2
+              exit 2
+              ;;
+          esac
 
       - name: Generate the Xcode project
         shell: bash

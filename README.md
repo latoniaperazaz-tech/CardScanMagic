@@ -64,6 +64,38 @@ xcodegen generate
 open CardScanMagic.xcodeproj
 ```
 
+## A/B test an external model
+
+The runtime deliberately keeps one stable model name (`CardDetector`) so the
+Swift/Vision code and the default build cannot be changed accidentally. To try
+another detector, first convert it on a Mac to a Core ML `.mlpackage` with
+Vision-compatible object-detection outputs and embedded NMS/class labels. Then
+run:
+
+```bash
+python scripts/export_coreml.py \
+  --coreml-source /path/to/ExternalDetector.mlpackage \
+  --model-id mantou-yolo11s
+xcodegen generate
+```
+
+The script copies the package to `App/Models/CardDetector.mlpackage` and writes
+the source identifier to `CardDetectorInfo.json`; it refuses to overwrite an
+existing package. A raw `.onnx` file is intentionally rejected because Core ML
+and Vision do not provide a generic ONNX importer, and an ONNX model without
+NMS/label metadata would produce misleading results. Convert it separately and
+then use the same command above. The GitHub Actions workflow exposes the same
+choice as `model_source=external-coreml` and downloads a `.mlpackage` (or a zip
+containing exactly one package) for a repeatable device A/B build.
+
+The workflow also offers `model_source=mantou-yolo11s`. It downloads the pinned
+`ManTou-Tou/poker-card-detection` YOLO11s weight, verifies its SHA-256, and
+exports it at its native 416px input size. Treat this as a test build: the
+repository does not state a clear license, the model is substantially larger,
+and its published metrics do not cover close, partial, or motion-blurred cards.
+The app still receives one model named `CardDetector`, so compare separate IPAs
+instead of bundling both models or running both on every frame.
+
 ## Install on your iPhone with a free Apple ID
 
 1. In Xcode, select the `CardScanMagic` target, then **Signing & Capabilities**.
