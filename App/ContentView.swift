@@ -3,7 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = ScanViewModel()
     @State private var isRecordsExpanded = false
-    @State private var isPresentationMode = false
+    @State private var isPresentationMode = true
+    @State private var hasOpenedScanner = false
     @State private var clearFeedbackID = 0
     @State private var isShowingClearConfirmation = false
 
@@ -81,9 +82,6 @@ struct ContentView: View {
         // reset control received the tap, even when there were no cards in
         // the history to visibly remove.
         .sensoryFeedback(.success, trigger: clearFeedbackID)
-        .task {
-            viewModel.startScanningIfNeeded()
-        }
         .onChange(of: viewModel.isScanning) { _, isScanning in
             withAnimation(.easeInOut(duration: 0.22)) {
                 // A stopped scanner is a review state; show the deal order when
@@ -219,6 +217,10 @@ struct ContentView: View {
 
     private func exitPresentationMode() {
         guard isPresentationMode else { return }
+        if !hasOpenedScanner {
+            hasOpenedScanner = true
+            viewModel.startScanningIfNeeded()
+        }
         withAnimation(.easeInOut(duration: 0.2)) {
             isPresentationMode = false
         }

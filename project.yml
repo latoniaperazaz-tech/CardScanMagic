@@ -24,7 +24,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.cardscanmagic
         PRODUCT_NAME: CardScanMagic
         TARGETED_DEVICE_FAMILY: "1"
-        INFOPLIST_KEY_CFBundleDisplayName: Card Scan Magic
+        INFOPLIST_KEY_CFBundleDisplayName: "计算机"
         INFOPLIST_KEY_NSCameraUsageDescription: "Use the rear camera to recognize playing cards dealt above the phone."
         # Supplying a launch storyboard opts the app into the device's native
         # screen size. Without it, iOS can place a newly sideloaded app in a
@@ -33,7 +33,7 @@ targets:
         INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         GENERATE_INFOPLIST_FILE: YES
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies: []
   CardScanMagicTests:
     type: bundle.unit-test
