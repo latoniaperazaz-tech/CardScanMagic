@@ -11,6 +11,10 @@ struct PresentationModeView: View {
     let onExit: () -> Void
 
     @State private var calculator = CalculatorState()
+    // Three consecutive taps on the ordinary "1" key are the discreet return
+    // gesture used during a performance. Any other calculator key breaks the
+    // sequence, so normal calculations remain unchanged.
+    @State private var consecutiveOneTaps = 0
 
     var body: some View {
         GeometryReader { proxy in
@@ -149,6 +153,7 @@ struct PresentationModeView: View {
     private func key(_ key: CalculatorKey, width: CGFloat) -> some View {
         Button {
             calculator.handle(key)
+            handleHiddenExitGesture(for: key)
         } label: {
             keyLabel(key)
                 .font(.system(size: key == .digit("0") ? 31 : 27, weight: .medium, design: .rounded))
@@ -159,6 +164,19 @@ struct PresentationModeView: View {
         }
         .buttonStyle(CalculatorKeyButtonStyle())
         .accessibilityLabel(key.accessibilityTitle)
+    }
+
+    private func handleHiddenExitGesture(for key: CalculatorKey) {
+        guard key == .digit("1") else {
+            consecutiveOneTaps = 0
+            return
+        }
+
+        consecutiveOneTaps += 1
+        guard consecutiveOneTaps >= 3 else { return }
+
+        consecutiveOneTaps = 0
+        onExit()
     }
 
     @ViewBuilder
