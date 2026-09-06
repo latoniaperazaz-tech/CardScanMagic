@@ -4,6 +4,7 @@ struct ContentView: View {
     @StateObject private var viewModel = ScanViewModel()
     @State private var showingClearConfirmation = false
     @State private var isRecordsExpanded = false
+    @State private var isPresentationMode = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -35,6 +36,16 @@ struct ContentView: View {
                     )
                 }
                 .ignoresSafeArea(edges: .bottom)
+
+                if isPresentationMode {
+                    PresentationModeView(
+                        isScanning: viewModel.isScanning,
+                        onExit: exitPresentationMode
+                    )
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .transition(.opacity)
+                    .zIndex(10)
+                }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .background(Color.black)
@@ -129,6 +140,31 @@ struct ContentView: View {
         .frame(height: 48)
         .background(.black.opacity(0.72), in: Capsule())
         .accessibilityElement(children: .combine)
+        .contextMenu {
+            Button {
+                enterPresentationMode()
+            } label: {
+                Label("进入演示模式", systemImage: "theatermasks.fill")
+            }
+        }
+        .accessibilityHint("长按打开操作菜单，可进入演示模式")
+        .accessibilityAction(named: Text("进入演示模式")) {
+            enterPresentationMode()
+        }
+    }
+
+    private func enterPresentationMode() {
+        guard !isPresentationMode else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isPresentationMode = true
+        }
+    }
+
+    private func exitPresentationMode() {
+        guard isPresentationMode else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isPresentationMode = false
+        }
     }
 
     private func topControl(
