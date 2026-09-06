@@ -194,7 +194,15 @@ final class CameraService: NSObject {
         let selectionPool = preferredFormats.isEmpty ? formats : preferredFormats
         let selected = selectionPool
             .sorted { lhs, rhs in
-                if lhs.rate != rhs.rate { return lhs.rate > rhs.rate }
+                // `desiredRates` is ordered for image quality: on the virtual
+                // multi-camera the 60 fps format gives the close-focus lens
+                // twice the exposure time of 120 fps. Preserve that order
+                // instead of accidentally selecting the fastest format.
+                if lhs.rate != rhs.rate {
+                    let lhsPriority = desiredRates.firstIndex(of: lhs.rate) ?? desiredRates.count
+                    let rhsPriority = desiredRates.firstIndex(of: rhs.rate) ?? desiredRates.count
+                    return lhsPriority < rhsPriority
+                }
                 let lhsArea = Int64(lhs.width) * Int64(lhs.height)
                 let rhsArea = Int64(rhs.width) * Int64(rhs.height)
                 return lhsArea > rhsArea

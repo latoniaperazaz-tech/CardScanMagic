@@ -30,9 +30,13 @@ struct ContentView: View {
                 .allowsHitTesting(false)
                 .zIndex(-1)
 
-                VStack(spacing: 0) {
+                VStack(spacing: 10) {
                     topBar
-                        .padding(.top, proxy.safeAreaInsets.top + 8)
+
+                    // Keep the calculator entry below the Dynamic Island and
+                    // outside the compact status capsule. The entire button
+                    // has a stable 44pt hit area on iPhone 14 Pro.
+                    calculatorEntry
 
                     Spacer(minLength: 0)
 
@@ -42,6 +46,7 @@ struct ContentView: View {
                         safeBottom: safeBottom
                     )
                 }
+                .padding(.top, proxy.safeAreaInsets.top + 8)
                 .ignoresSafeArea(edges: .bottom)
                 // Keep the SwiftUI controls above the camera view and make
                 // that ordering explicit for UIKit-backed previews.
@@ -158,45 +163,49 @@ struct ContentView: View {
     }
 
     private var statusReadout: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("炸金花 · 三张牌")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.74))
+
+                Text(viewModel.statusText)
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+
+            Spacer(minLength: 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .frame(height: 48)
+        .background(.black.opacity(0.72), in: Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("炸金花三张牌，\(viewModel.statusText)")
+    }
+
+    private var calculatorEntry: some View {
         Button(action: enterPresentationMode) {
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("炸金花 · 三张牌")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.74))
+                Image(systemName: "calculator.fill")
+                    .font(.headline.weight(.semibold))
 
-                    Text(viewModel.statusText)
-                        .font(.subheadline.monospacedDigit().weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                }
-
-                Spacer(minLength: 4)
-
-                // This used to be only a faint icon, which made the direct
-                // calculator entry easy to overlook on a live camera view.
-                // The entire status capsule remains the tap target.
-                VStack(spacing: 1) {
-                    Image(systemName: "calculator")
-                        .font(.subheadline.weight(.semibold))
-
-                    Text("计算器")
-                        .font(.caption2.weight(.semibold))
-                }
-                .foregroundStyle(.white.opacity(0.78))
-                .frame(width: 48, height: 36)
-                .background(.white.opacity(0.10), in: Capsule())
+                Text("计算器")
+                    .font(.subheadline.weight(.semibold))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .frame(height: 48)
-            .background(.black.opacity(0.72), in: Capsule())
-            // Make the full allotted capsule slot tappable, including its
-            // square corners. This is more forgiving than limiting touches
-            // to the visible rounded outline.
+            .foregroundStyle(.white)
+            .frame(width: 128, height: 44)
+            .background(.black.opacity(0.82), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(.white.opacity(0.24), lineWidth: 1)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.horizontal, 16)
         .accessibilityLabel("进入演示计算器")
         .accessibilityHint("点按打开计算器表演界面；识别会继续在后台运行")
     }
