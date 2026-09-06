@@ -15,10 +15,10 @@ cards per round. After the third confirmed card it stops the camera automaticall
 and keeps the three-card result on screen. Tap Clear before the next hand.
 
 - Requests the best available rear camera. On a multi-camera iPhone such as
-  the 14 Pro it uses the virtual rear camera with automatic macro enabled, so
-  a card brought close to the lens can switch to the close-focusing camera.
-  It prefers 60 fps for that mode to give autofocus and exposure enough time;
-  other devices use 120 fps when available, then 60 fps. 240 fps is
+  the 14 Pro it uses the virtual rear camera, allowing the system's normal
+  close-focus lens selection as a card approaches the phone. It prefers 60 fps
+  for that mode to give autofocus and exposure enough time; other devices use
+  120 fps when available, then 60 fps. 240 fps is
   intentionally not the default: it shortens exposure in ordinary indoor
   light without increasing the model's roughly 30 inferences per second.
 - Samples the high-frame-rate stream, retaining a sharp candidate frame instead

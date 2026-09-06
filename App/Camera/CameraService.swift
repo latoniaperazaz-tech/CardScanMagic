@@ -90,9 +90,10 @@ final class CameraService: NSObject {
     }
 
     /// Prefer a virtual rear-camera device when the phone offers one. On an
-    /// iPhone 14 Pro this lets AVFoundation move from the wide lens to the
-    /// close-focus macro lens as a card passes very near the camera. Older
-    /// phones retain the same physical-wide-camera fallback as before.
+    /// iPhone 14 Pro this gives AVFoundation its virtual multi-camera device,
+    /// allowing its normal automatic lens selection to choose a close-focus
+    /// constituent camera as a card passes very near the phone. Older phones
+    /// retain the same physical-wide-camera fallback as before.
     private func preferredRearCamera() -> AVCaptureDevice? {
         let preferredTypes: [AVCaptureDevice.DeviceType] = [
             .builtInTripleCamera,
@@ -169,12 +170,17 @@ final class CameraService: NSObject {
     private func configureBestFrameRate(for camera: AVCaptureDevice) -> Int {
         // The neural model is intentionally capped near 30 inferences/sec, so
         // 240 capture fps only makes individual frames darker indoors without
-        // yielding more model decisions. A virtual macro-capable camera gets
-        // 60 fps first: it doubles available exposure time and gives autofocus
-        // a stable close-card image, while still sampling more frames than the
-        // recognizer consumes. Other phones retain the 120 fps preference.
+        // yielding more model decisions. A virtual multi-camera gets 60 fps
+        // first: it doubles available exposure time and gives its automatic
+        // close-focus lens switch a stable card image, while still sampling
+        // more frames than the recognizer consumes. Other phones retain the
+        // 120 fps preference.
         // Prefer 1080p formats, then fall back to the clearest supported mode.
-        let desiredRates = camera.isAutoMacroSupported ? [60, 120] : [120, 60]
+        let usesVirtualRearCamera = [
+            AVCaptureDevice.DeviceType.builtInTripleCamera,
+            .builtInDualWideCamera
+        ].contains(camera.deviceType)
+        let desiredRates = usesVirtualRearCamera ? [60, 120] : [120, 60]
         let formats = camera.formats.compactMap { format -> (format: AVCaptureDevice.Format, width: Int32, height: Int32, rate: Int)? in
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             guard let rate = desiredRates.first(where: { supports(frameRate: Double($0), in: format) }) else {
@@ -215,9 +221,6 @@ final class CameraService: NSObject {
             }
             if camera.isAutoFocusRangeRestrictionSupported {
                 camera.autoFocusRangeRestriction = .near
-            }
-            if camera.isAutoMacroSupported {
-                camera.isAutoMacroEnabled = true
             }
             if let selected {
                 return selected.rate
