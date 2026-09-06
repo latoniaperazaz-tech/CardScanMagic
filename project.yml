@@ -26,6 +26,11 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_CFBundleDisplayName: Card Scan Magic
         INFOPLIST_KEY_NSCameraUsageDescription: "Use the rear camera to recognize playing cards dealt above the phone."
+        # Supplying a launch storyboard opts the app into the device's native
+        # screen size. Without it, iOS can place a newly sideloaded app in a
+        # legacy 3:2 compatibility canvas, which appears as large black bars
+        # above and below the camera preview on an iPhone 14 Pro.
+        INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         GENERATE_INFOPLIST_FILE: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
