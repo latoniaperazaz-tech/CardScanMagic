@@ -105,6 +105,9 @@ struct ContentView: View {
             // action-sheet confirmation was easy to miss over the live
             // preview and made this control appear unresponsive on device.
             .accessibilityHint("点按立即清空本手记录并重置识别状态")
+            // Leave a little more clearance below the Dynamic Island for the
+            // reset control without moving the scan status or pause button.
+            .offset(y: 10)
 
             statusReadout
 
