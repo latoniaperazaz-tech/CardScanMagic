@@ -136,6 +136,8 @@ struct ContentView: View {
             )
             .disabled(viewModel.isPreparing || viewModel.isRoundComplete)
             .opacity(viewModel.isPreparing || viewModel.isRoundComplete ? 0.58 : 1)
+            // Match the reset control's clearance below the Dynamic Island.
+            .offset(y: 10)
         }
         .padding(.horizontal, 16)
         .foregroundStyle(.white)
