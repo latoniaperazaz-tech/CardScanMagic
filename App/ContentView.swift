@@ -56,7 +56,10 @@ struct ContentView: View {
                         onExit: exitPresentationMode
                     )
                     .frame(width: proxy.size.width, height: proxy.size.height)
-                    .transition(.opacity)
+                    // Cover the camera immediately. Fading the overlay in
+                    // would briefly reveal the scanner and its card labels to
+                    // anyone watching the phone during the switch.
+                    .transition(.identity)
                     // The calculator must cover the scanner controls as well
                     // as the camera preview while presentation mode is on.
                     .zIndex(30)
