@@ -44,6 +44,11 @@ struct ContentView: View {
                 // Keep the SwiftUI controls above the camera view and make
                 // that ordering explicit for UIKit-backed previews.
                 .zIndex(20)
+                // Presentation mode is a visual-only cover. Keep the real
+                // scanner out of the VoiceOver rotor as well, otherwise its
+                // status and card records could be spoken while the cover is
+                // active.
+                .accessibilityHidden(isPresentationMode)
 
                 if isPresentationMode {
                     PresentationModeView(

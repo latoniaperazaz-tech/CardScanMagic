@@ -45,6 +45,7 @@ struct PresentationModeView: View {
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
         .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
         .accessibilityLabel("计算器")
         .accessibilityHint("识别仍在后台运行")
     }
