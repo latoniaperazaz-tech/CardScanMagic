@@ -22,6 +22,11 @@ struct ContentView: View {
                 .frame(width: proxy.size.width, height: proxy.size.height)
                 .clipped()
                 .ignoresSafeArea()
+                // The preview is a display-only surface.  A UIKit view that
+                // fills the screen can otherwise win hit testing in a ZStack
+                // on some iOS releases, making the controls above it appear
+                // tappable while silently swallowing the touch.
+                .allowsHitTesting(false)
 
                 VStack(spacing: 0) {
                     topBar
@@ -36,6 +41,9 @@ struct ContentView: View {
                     )
                 }
                 .ignoresSafeArea(edges: .bottom)
+                // Keep the SwiftUI controls above the camera view and make
+                // that ordering explicit for UIKit-backed previews.
+                .zIndex(20)
 
                 if isPresentationMode {
                     PresentationModeView(
@@ -122,6 +130,12 @@ struct ContentView: View {
         }
         .padding(.horizontal, 16)
         .foregroundStyle(.white)
+        // Give the whole bar a deterministic hit-test region.  This is
+        // especially important when it sits over a full-screen
+        // UIViewRepresentable and when the status-bar area is ignored.
+        .contentShape(Rectangle())
+        .zIndex(21)
+        .allowsHitTesting(true)
     }
 
     private var statusReadout: some View {
@@ -186,6 +200,10 @@ struct ContentView: View {
                 }
         }
         .buttonStyle(.plain)
+        // Keep a comfortable 52pt target even if the SF Symbol's intrinsic
+        // bounds are smaller than the visible circle.
+        .frame(width: 52, height: 52)
+        .contentShape(Circle())
         .accessibilityLabel(accessibilityLabel)
     }
 
