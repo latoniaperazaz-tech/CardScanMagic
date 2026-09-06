@@ -72,7 +72,7 @@ jobs:
               # Pin the source revision and hash so a later upstream change
               # cannot silently change the comparison model.
               mantou_url="https://raw.githubusercontent.com/ManTou-Tou/poker-card-detection/16b6f7f75dec73ab8e61d76e3927a8260d37bdf4/deploy/cards_yolo11s_best.pt"
-              mantou_sha256="012ed21c4b58d178ebbf8b10e4b06cd4d7b05734b4d7c044246a8db2978d3fd2"
+              mantou_sha256="012ed21c4b58d178ebb8fb10e4b06cd4d7b05734b4d7c044246a8db2978d3fd2"
               mkdir -p models
               curl --fail --location --retry 3 --silent --show-error \
                 "$mantou_url" \
