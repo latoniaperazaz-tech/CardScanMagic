@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import ImageIO
 import UIKit
 
 enum CameraError: LocalizedError {
@@ -20,7 +21,11 @@ enum CameraError: LocalizedError {
 
 final class CameraService: NSObject {
     let session = AVCaptureSession()
-    var onFrame: ((CVPixelBuffer, TimeInterval) -> Void)?
+    /// The orientation accompanying each callback describes the exact pixel
+    /// buffer delivered by AVCaptureVideoDataOutput. Some camera formats keep
+    /// the sensor's landscape memory while others deliver portrait pixels, so
+    /// this is determined per sample rather than assumed at setup time.
+    var onFrame: ((CVPixelBuffer, TimeInterval, CGImagePropertyOrientation) -> Void)?
     var onError: ((Error) -> Void)?
     var onModeChanged: ((Int) -> Void)?
 
@@ -30,6 +35,7 @@ final class CameraService: NSObject {
     private var isConfigured = false
     private var configuredFrameRate = 30
     private var wantsToRun = false
+    private let outputOrientation: AVCaptureVideoOrientation = .portrait
 
     func start() {
         setWantsToRun(true)
@@ -123,8 +129,15 @@ final class CameraService: NSObject {
         session.addOutput(output)
 
         let frameRate = configureBestFrameRate(for: camera)
-        if let connection = output.connection(with: .video), connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
+        if let connection = output.connection(with: .video) {
+            // Set the connection when the output supports it so the preview
+            // and video-data stream use the same display orientation. This is
+            // not guaranteed to rotate the CVPixelBuffer's backing memory on
+            // every iOS/camera format, however; captureOutput therefore
+            // derives Vision's orientation from each buffer's dimensions.
+            if connection.isVideoOrientationSupported {
+                connection.videoOrientation = outputOrientation
+            }
             if connection.isVideoStabilizationSupported {
                 connection.preferredVideoStabilizationMode = .off
             }
@@ -137,13 +150,12 @@ final class CameraService: NSObject {
 
     @discardableResult
     private func configureBestFrameRate(for camera: AVCaptureDevice) -> Int {
-        // A high frame rate is useful only if the card still has enough
-        // pixels to read. Some iPhones expose 240 fps at 720p as well as
-        // 1080p; prefer the 1080p family first, then choose its fastest mode.
-        // Only fall back to another resolution when no 1080p high-speed mode
-        // exists. This avoids accidentally selecting a 4K/60 format (large but
-        // slower) or a very soft 720p/240 format on a fast-deal setup.
-        let desiredRates = [240, 120, 60]
+        // The neural model is intentionally capped near 30 inferences/sec, so
+        // 240 capture fps only makes individual frames darker indoors without
+        // yielding more model decisions. 120 fps still gives several sharp
+        // samples for a fast deal while leaving twice as much exposure time.
+        // Prefer 1080p formats, then fall back to the clearest supported mode.
+        let desiredRates = [120, 60]
         let formats = camera.formats.compactMap { format -> (format: AVCaptureDevice.Format, width: Int32, height: Int32, rate: Int)? in
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             guard let rate = desiredRates.first(where: { supports(frameRate: Double($0), in: format) }) else {
@@ -236,6 +248,31 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
     ) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
-        onFrame?(pixelBuffer, timestamp)
+        // A video-data connection may expose either the sensor's native
+        // landscape buffer or a physically rotated portrait buffer. Use the
+        // dimensions of this exact sample rather than a one-time assumption
+        // made during session setup. This also covers devices where
+        // `isVideoOrientationSupported` is false (the normal rear-camera
+        // fallback is `.right`).
+        let orientation = Self.visionOrientation(for: pixelBuffer)
+        onFrame?(pixelBuffer, timestamp, orientation)
+    }
+
+    static func visionOrientation(for pixelBuffer: CVPixelBuffer) -> CGImagePropertyOrientation {
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+
+        guard width > 0, height > 0 else {
+            // Invalid dimensions are not expected from AVCaptureVideoDataOutput,
+            // but `.right` is the safe rear-camera sensor fallback if one does
+            // occur.
+            return .right
+        }
+
+        // Rear-camera sensor buffers are landscape. A clockwise quarter-turn
+        // presents them in the app's locked portrait orientation. If the
+        // output has already rotated the pixels, width < height and no Vision
+        // rotation is needed.
+        return width > height ? .right : .up
     }
 }

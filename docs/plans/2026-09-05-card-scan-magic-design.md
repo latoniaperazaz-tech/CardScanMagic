@@ -19,21 +19,23 @@ performer turns the phone over after dealing.
 ## Architecture
 
 ```text
-Rear camera (1080p, 240 fps preferred)
+Rear camera (1080p, 120 fps preferred)
   -> sharp-frame sampler (at most 30 model inputs/sec)
   -> Core ML object detector, entirely on the phone
   -> position-aware card event coordinator
   -> persistent SwiftUI card history
 ```
 
-`CameraService` chooses a 1920x1080 back-camera format first, using 240 fps when
-that resolution supports it, then falling back to 120 fps and 60 fps. It only
-uses a lower-resolution high-speed format when no clear 1080p mode exists.
+`CameraService` chooses a 1920x1080 back-camera format first, using 120 fps when
+that resolution supports it, then falling back to 60 fps. It only uses a
+lower-resolution high-speed format when no clear 1080p mode exists. 240 fps is
+not selected by default because it reduces exposure time indoors while the
+recognition pipeline is capped near 30 model inferences per second.
 `SharpFrameSampler`
 measures luma-edge contrast on the inexpensive camera luma plane and retains
 the clearest frame from each sampling interval. It keeps collecting while the
 previous inference runs, so a short card pass is not lost to a busy model. This
-avoids queuing 240 neural inferences per second.
+avoids queuing a neural inference for every camera frame.
 
 `RecognitionEngine` loads `CardDetector.mlmodelc` from the application bundle
 and submits selected frames through Vision/Core ML. The export script produces
@@ -43,11 +45,10 @@ which keeps the whole camera image in scope instead of cropping it to a square.
 
 `CardEventCoordinator` matches detection boxes across frames by overlap,
 predicted centre position and velocity. Normal results require two consistent
-observations in a five-frame confidence-weighted vote; a single frame is only
-accepted at 0.97 confidence. Each exact card face is recorded only once per
-scan session, and a short spatial/trajectory guard suppresses a duplicate when
-a fast pass briefly loses tracking. Different ranks with the same suit are
-separate cards.
+observations in a four-frame vote with an average confidence of at least 0.85.
+Each exact card face is recorded only once per scan session, and a short
+spatial/trajectory guard suppresses a duplicate when a fast pass briefly loses
+tracking. Different ranks with the same suit are separate cards.
 
 ## Failure behavior
 
@@ -58,7 +59,7 @@ separate cards.
   problem with a usable status message.
 - Dark, blurry, reflective, or low-confidence frames: they are ignored rather
   than written as incorrect cards.
-- Camera mode less capable than 240 fps: scanning continues at 120 fps or 60 fps.
+- Camera mode less capable than 120 fps: scanning continues at 60 fps.
 
 ## Validation
 

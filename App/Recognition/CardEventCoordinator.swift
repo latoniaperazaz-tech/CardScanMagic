@@ -1,14 +1,18 @@
 import CoreGraphics
 import Foundation
 
-/// Converts noisy per-frame detections into one record per physical card pass.
-///
-/// The detector can briefly disagree while a card is moving or reflecting
-/// light. A track therefore keeps a short, confidence-weighted vote history;
-/// only a consensus (or an exceptionally strong single frame) is committed.
-/// Tracks also carry velocity so a fast card is not split into several tracks
-/// merely because its centre moved more than a fixed IoU threshold between
-/// model frames.
+struct CardEventUpdate {
+    let records: [CardRecord]
+    /// These are confirmed tracks, not raw per-frame model output. The UI uses
+    /// them for overlays so a visible label always agrees with a card that is
+    /// eligible to be written to the history.
+    let stableDetections: [CardDetection]
+}
+
+/// Converts noisy detector output into one record per card pass. A label must
+/// survive two geometrically plausible observations before it can be displayed
+/// or recorded. This intentionally favors a missed blurred frame over a wrong
+/// card in the magic routine's permanent history.
 final class CardEventCoordinator {
     private struct Vote {
         let label: CardFace
@@ -18,76 +22,92 @@ final class CardEventCoordinator {
     private struct Track {
         let id: UUID
         var box: CGRect
+        var orientedImageSize: CGSize
         var velocity: CGPoint
         var votes: [Vote]
-        var firstSeen: Date
         var lastSeen: Date
         var hitCount: Int
         var wasRecorded: Bool
 
-        init(box: CGRect, vote: Vote, date: Date) {
+        init(detection: CardDetection, date: Date) {
             id = UUID()
-            self.box = box
+            box = detection.boundingBox
+            orientedImageSize = detection.orientedImageSize
             velocity = .zero
-            votes = [vote]
-            firstSeen = date
+            votes = [Vote(label: detection.card, confidence: detection.confidence)]
             lastSeen = date
             hitCount = 1
             wasRecorded = false
         }
     }
 
-    private struct RecentRecord {
-        let card: CardFace
+    /// A just-recorded card can briefly receive a different high-confidence
+    /// label while it leaves the frame. Keep a very short spatial memory so
+    /// that label flicker cannot become a second card in the history.
+    private struct RecentRecordedPass {
         let date: Date
         let box: CGRect
         let velocity: CGPoint
     }
 
     private var tracks: [Track] = []
-    private var recentRecords: [RecentRecord] = []
+    private var recentRecordedPasses: [RecentRecordedPass] = []
     private var recordedCards = Set<CardFace>()
     private var lastTimestamp: Date?
 
-    // These values are deliberately conservative for a moving card. They can
-    // be tuned after an on-device sample, but avoid the old .88 one-frame fast
-    // path that permanently stored many motion-blurred misclassifications.
-    private let minimumDetectionConfidence: Float = 0.45
-    private let minimumBoxArea: CGFloat = 0.001
-    private let confirmationWindow = 5
+    // The upstream model is strong on a clear, fully visible card. It is much
+    // less trustworthy on a thin slice of a card, table texture, glare, or a
+    // motion-blurred corner. Reject those before they can affect a track.
+    private let minimumDetectionConfidence: Float = 0.78
+    private let minimumConfirmedConfidence: Float = 0.85
+    private let minimumBoxArea: CGFloat = 0.014
+    private let minimumVisibleFraction: CGFloat = 0.78
+    private let minimumShortSide: CGFloat = 0.070
+    private let minimumShortSidePixels: CGFloat = 64
+    private let minimumShortToLongAspect: CGFloat = 0.42
+    private let confirmationWindow = 4
     private let requiredMatchingVotes = 2
-    private let confidenceThreshold: Float = 0.58
-    private let fastPathConfidence: Float = 0.97
-    private let trackTimeout: TimeInterval = 0.38
-    private let duplicateGuard: TimeInterval = 1.20
-    private let physicalDuplicateWindow: TimeInterval = 0.11
-    private let maximumPredictionGap: TimeInterval = 0.35
-    private let minimumMotionSpeed: CGFloat = 0.35
-    private let maximumTrackSpeed: CGFloat = 8.0
+    private let trackTimeout: TimeInterval = 0.24
+    private let initialLinkWindow: TimeInterval = 0.09
+    private let minimumOverlap: CGFloat = 0.12
+    private let maximumAreaDifference: CGFloat = 0.42
+    private let maximumPredictionGap: TimeInterval = 0.20
+    private let maximumTrackSpeed: CGFloat = 6.0
+    private let unresolvedLabelConflictWindow: TimeInterval = 0.075
+    private let recentPassGuardWindow: TimeInterval = 0.12
 
     func reset() {
         tracks.removeAll()
-        recentRecords.removeAll()
+        recentRecordedPasses.removeAll()
         recordedCards.removeAll()
         lastTimestamp = nil
     }
 
+    /// Compatibility entry point used by the unit tests and callers that only
+    /// care about permanent records.
     func process(_ detections: [CardDetection], at date: Date) -> [CardRecord] {
-        guard date.timeIntervalSinceReferenceDate.isFinite else { return [] }
+        processUpdate(detections, at: date).records
+    }
 
-        // The camera timestamps are monotonic. Ignore a late result rather
-        // than letting it move a track backwards and trigger a duplicate.
+    func processUpdate(_ detections: [CardDetection], at date: Date) -> CardEventUpdate {
+        guard date.timeIntervalSinceReferenceDate.isFinite else {
+            return CardEventUpdate(records: [], stableDetections: [])
+        }
+
+        // Camera timestamps are monotonic. Ignore a late Vision result instead
+        // of allowing it to move a track backwards and create a duplicate.
         if let lastTimestamp, date < lastTimestamp {
-            return []
+            return CardEventUpdate(records: [], stableDetections: [])
         }
         lastTimestamp = date
 
-        recentRecords.removeAll {
-            date.timeIntervalSince($0.date) > duplicateGuard
+        tracks.removeAll { date.timeIntervalSince($0.lastSeen) > trackTimeout }
+        recentRecordedPasses.removeAll {
+            date.timeIntervalSince($0.date) > recentPassGuardWindow
         }
 
         let validDetections = detections
-            .compactMap { self.sanitizedDetection($0) }
+            .compactMap { sanitizedDetection($0) }
             .sorted { $0.confidence > $1.confidence }
 
         var matchedTrackIDs = Set<UUID>()
@@ -100,13 +120,7 @@ final class CardEventCoordinator {
                 update(&tracks[trackIndex], with: detection, at: date)
                 matchedTrackIDs.insert(tracks[trackIndex].id)
             } else {
-                tracks.append(
-                    Track(
-                        box: detection.boundingBox,
-                        vote: Vote(label: detection.card, confidence: detection.confidence),
-                        date: date
-                    )
-                )
+                tracks.append(Track(detection: detection, date: date))
                 matchedTrackIDs.insert(tracks[tracks.endIndex - 1].id)
             }
         }
@@ -115,20 +129,15 @@ final class CardEventCoordinator {
         for index in tracks.indices where !tracks[index].wasRecorded {
             guard let stableCard = stableCard(in: tracks[index].votes),
                   !recordedCards.contains(stableCard.card),
-                  !hasRecentlyRecorded(
-                    stableCard.card,
-                    for: tracks[index],
-                    at: date,
-                    includeStationarySingleFrameGuard: tracks[index].votes.count == 1
-                  ) else {
+                  !hasUnresolvedLabelConflict(for: tracks[index], at: date),
+                  !hasRecentPassConflict(for: tracks[index], at: date) else {
                 continue
             }
 
             tracks[index].wasRecorded = true
             recordedCards.insert(stableCard.card)
-            recentRecords.append(
-                RecentRecord(
-                    card: stableCard.card,
+            recentRecordedPasses.append(
+                RecentRecordedPass(
                     date: date,
                     box: tracks[index].box,
                     velocity: tracks[index].velocity
@@ -143,13 +152,18 @@ final class CardEventCoordinator {
             )
         }
 
-        // Keep a track through a short detector miss. At 30–60 effective
-        // inferences/sec this covers several frames and prevents a new track
-        // from being created when a card is briefly occluded by a hand.
-        tracks.removeAll {
-            date.timeIntervalSince($0.lastSeen) > trackTimeout
+        let stableDetections = tracks.compactMap { track -> CardDetection? in
+            guard let stableCard = stableCard(in: track.votes) else { return nil }
+            return CardDetection(
+                card: stableCard.card,
+                confidence: stableCard.confidence,
+                boundingBox: track.box,
+                orientedImageSize: track.orientedImageSize
+            )
         }
-        return records
+        .sorted { $0.confidence > $1.confidence }
+
+        return CardEventUpdate(records: records, stableDetections: stableDetections)
     }
 
     private func sanitizedDetection(_ detection: CardDetection) -> CardDetection? {
@@ -159,48 +173,71 @@ final class CardEventCoordinator {
         }
 
         let unitRect = CGRect(x: 0, y: 0, width: 1, height: 1)
-        let box = detection.boundingBox.standardized
-        guard box.minX.isFinite, box.minY.isFinite,
-              box.maxX.isFinite, box.maxY.isFinite,
-              box.width > 0, box.height > 0 else {
+        let original = detection.boundingBox.standardized
+        guard original.minX.isFinite,
+              original.minY.isFinite,
+              original.maxX.isFinite,
+              original.maxY.isFinite,
+              original.width > 0,
+              original.height > 0 else {
             return nil
         }
 
-        let clipped = box.intersection(unitRect)
+        let clipped = original.intersection(unitRect)
         guard !clipped.isNull,
               clipped.width > 0,
               clipped.height > 0,
-              clipped.width * clipped.height >= minimumBoxArea else {
+              clipped.area >= minimumBoxArea,
+              clipped.area / original.area >= minimumVisibleFraction else {
+            return nil
+        }
+
+        let shortSide = min(clipped.width, clipped.height)
+        let longSide = max(clipped.width, clipped.height)
+        guard shortSide >= minimumShortSide,
+              longSide > 0,
+              shortSide / longSide >= minimumShortToLongAspect,
+              min(detection.orientedImageSize.width, detection.orientedImageSize.height)
+                  * shortSide >= minimumShortSidePixels else {
+            return nil
+        }
+
+        guard detection.orientedImageSize.width.isFinite,
+              detection.orientedImageSize.height.isFinite,
+              detection.orientedImageSize.width > 0,
+              detection.orientedImageSize.height > 0 else {
             return nil
         }
 
         return CardDetection(
             card: detection.card,
             confidence: detection.confidence,
-            boundingBox: clipped
+            boundingBox: clipped,
+            orientedImageSize: detection.orientedImageSize
         )
     }
 
     private func update(_ track: inout Track, with detection: CardDetection, at date: Date) {
         let oldCenter = track.box.center
         let newCenter = detection.boundingBox.center
-        let rawDelta = CGPoint(x: newCenter.x - oldCenter.x, y: newCenter.y - oldCenter.y)
         let elapsed = date.timeIntervalSince(track.lastSeen)
         if elapsed > 0.0005 {
             let safeElapsed = min(maximumPredictionGap, max(1.0 / 120.0, elapsed))
-            let instantaneousVelocity = CGPoint(
-                x: rawDelta.x / safeElapsed,
-                y: rawDelta.y / safeElapsed
-            ).clampedMagnitude(to: maximumTrackSpeed)
+            let instantVelocity = CGPoint(
+                x: (newCenter.x - oldCenter.x) / safeElapsed,
+                y: (newCenter.y - oldCenter.y) / safeElapsed
+            )
+            .clampedMagnitude(to: maximumTrackSpeed)
 
-            // Exponential smoothing makes prediction useful without allowing
-            // a single noisy box to fling a track across the whole frame.
             track.velocity = CGPoint(
-                x: track.velocity.x * 0.65 + instantaneousVelocity.x * 0.35,
-                y: track.velocity.y * 0.65 + instantaneousVelocity.y * 0.35
-            ).clampedMagnitude(to: maximumTrackSpeed)
+                x: track.velocity.x * 0.60 + instantVelocity.x * 0.40,
+                y: track.velocity.y * 0.60 + instantVelocity.y * 0.40
+            )
+            .clampedMagnitude(to: maximumTrackSpeed)
         }
+
         track.box = detection.boundingBox
+        track.orientedImageSize = detection.orientedImageSize
         track.lastSeen = date
         track.hitCount += 1
         track.votes.append(Vote(label: detection.card, confidence: detection.confidence))
@@ -216,14 +253,18 @@ final class CardEventCoordinator {
 
         for index in tracks.indices {
             let track = tracks[index]
-            // Once an event has been committed, do not let its old box absorb
-            // the next card travelling through the same path. A later
-            // detection of the same face is harmlessly rejected by
-            // `recordedCards` and gets its own short-lived track instead.
-            guard !excludedIDs.contains(track.id), !track.wasRecorded else { continue }
+            guard !excludedIDs.contains(track.id),
+                  track.votes.last?.label == detection.card else {
+                continue
+            }
 
             let age = date.timeIntervalSince(track.lastSeen)
             guard age >= 0, age <= trackTimeout else { continue }
+
+            let trackArea = max(0.0001, track.box.area)
+            let detectionArea = max(0.0001, detection.boundingBox.area)
+            let sizeDifference = abs(trackArea - detectionArea) / max(trackArea, detectionArea)
+            guard sizeDifference <= maximumAreaDifference else { continue }
 
             let predictionAge = min(age, maximumPredictionGap)
             let predictedCenter = CGPoint(
@@ -236,142 +277,135 @@ final class CardEventCoordinator {
             )
             let overlap = predictedBox.intersectionOverUnion(with: detection.boundingBox)
             let centerDistance = predictedCenter.distance(to: detection.boundingBox.center)
-            let diagonal = max(0.01, track.box.diagonal)
-            let speed = track.velocity.magnitude
-            let distanceGate = min(
-                0.52,
-                max(0.14, diagonal * 0.90 + speed * predictionAge * 1.60 + 0.06)
-            )
-            guard overlap >= 0.02 || centerDistance <= distanceGate else { continue }
 
-            let lastLabel = track.votes.last?.label
-            let labelBonus: CGFloat = lastLabel == detection.card ? 0.16 : 0
-            let trackArea = max(0.01, track.box.area)
-            let detectionArea = max(0.01, detection.boundingBox.area)
-            let sizeDifference = abs(trackArea - detectionArea) / max(trackArea, detectionArea)
-            let score = overlap * 2.4 - centerDistance * 1.25
-                - min(0.30, sizeDifference * 0.08) + labelBonus
+            let distanceGate: CGFloat
+            if track.hitCount == 1 {
+                // The first two model samples may be far apart during a very
+                // fast pass. Only allow this wider bridge immediately after
+                // the first sample, with the same label and a similar box.
+                guard age <= initialLinkWindow else { continue }
+                distanceGate = min(0.38, max(0.14, track.box.diagonal * 1.20 + 0.06))
+            } else {
+                let predictedDistance = track.box.diagonal * 0.76
+                    + track.velocity.magnitude * predictionAge * 1.20 + 0.045
+                distanceGate = min(0.34, max(0.12, predictedDistance))
+            }
 
+            guard overlap >= minimumOverlap || centerDistance <= distanceGate else { continue }
+
+            let score = overlap * 2.5 - centerDistance * 1.10 - sizeDifference * 0.25
             if best == nil || score > best!.score {
                 best = (index, score)
             }
         }
+
         return best?.index
     }
 
     private func stableCard(in votes: [Vote]) -> (card: CardFace, confidence: Float)? {
-        guard !votes.isEmpty else { return nil }
-
-        struct Candidate {
-            let card: CardFace
-            let count: Int
-            let weight: Float
-            let meanConfidence: Float
-        }
+        guard votes.count >= requiredMatchingVotes else { return nil }
 
         let grouped = Dictionary(grouping: votes, by: \.label)
-        let candidates = grouped.map { card, cardVotes in
-            let weight = cardVotes.reduce(Float.zero) { partial, vote in
-                partial + vote.confidence * vote.confidence
+        let candidates = grouped
+            .map { card, cardVotes -> (card: CardFace, votes: [Vote]) in
+                (card, cardVotes)
             }
-            let mean = cardVotes.map(\.confidence).reduce(0, +) / Float(cardVotes.count)
-            return Candidate(
-                card: card,
-                count: cardVotes.count,
-                weight: weight,
-                meanConfidence: mean
-            )
-        }
-        .sorted { lhs, rhs in
-            if lhs.weight == rhs.weight { return lhs.count > rhs.count }
-            return lhs.weight > rhs.weight
-        }
+            .sorted {
+                if $0.votes.count != $1.votes.count {
+                    return $0.votes.count > $1.votes.count
+                }
+                let lhsConfidence = $0.votes.reduce(Float.zero) { $0 + $1.confidence }
+                let rhsConfidence = $1.votes.reduce(Float.zero) { $0 + $1.confidence }
+                return lhsConfidence > rhsConfidence
+            }
 
         guard let winner = candidates.first,
-              winner.meanConfidence >= confidenceThreshold else {
+              winner.votes.count >= requiredMatchingVotes else {
             return nil
         }
 
-        // A single frame is only a fallback for an exceptionally confident,
-        // otherwise unambiguous detection. Normal cards need two agreeing
-        // observations, so a latest high-confidence wrong label cannot replace
-        // an established consensus.
-        if winner.count == 1 {
-            guard votes.count == 1, winner.meanConfidence >= fastPathConfidence else {
-                return nil
-            }
-            return (winner.card, winner.meanConfidence)
+        // Never choose arbitrarily when the recent window is split evenly
+        // between two labels. A tie is a common symptom of motion blur or a
+        // card edge crossing another card; waiting for one more agreeing frame
+        // is safer than putting a wrong face in the magic history.
+        if let runner = candidates.dropFirst().first,
+           winner.votes.count <= runner.votes.count {
+            return nil
         }
 
-        guard winner.count >= requiredMatchingVotes else { return nil }
-        if let runner = candidates.dropFirst().first {
-            // Count advantage matters when a single sharp but conflicting frame
-            // is present; the weight margin prevents tied noisy votes from being
-            // committed arbitrarily.
-            if winner.count == runner.count {
-                guard winner.weight >= runner.weight * 1.40
-                        || winner.weight - runner.weight >= 0.18 else {
-                    return nil
-                }
-            }
-        }
-        return (winner.card, winner.meanConfidence)
+        let confidence = winner.votes.map(\.confidence).reduce(0, +) / Float(winner.votes.count)
+        guard confidence >= minimumConfirmedConfidence else { return nil }
+        return (winner.card, confidence)
     }
 
-    private func hasRecentlyRecorded(
-        _ card: CardFace,
-        for track: Track,
-        at date: Date,
-        includeStationarySingleFrameGuard: Bool
-    ) -> Bool {
-        for recent in recentRecords {
-            let elapsed = date.timeIntervalSince(recent.date)
-            guard elapsed >= 0 else { continue }
-
-            // Exact-face de-duplication is the normal 52-card safeguard.
-            if recent.card == card { return true }
-
-            // If a track was split during a very short detector miss, suppress
-            // a second event travelling along the same tiny path even if the
-            // two transient labels disagree. The window is intentionally much
-            // shorter than a normal deal interval so adjacent different cards
-            // can still be recorded.
-            guard elapsed <= physicalDuplicateWindow else { continue }
-            let predictedCenter = CGPoint(
-                x: recent.box.center.x + recent.velocity.x * elapsed,
-                y: recent.box.center.y + recent.velocity.y * elapsed
-            )
-            let distance = predictedCenter.distance(to: track.box.center)
-
-            // A one-frame, high-confidence candidate immediately on top of a
-            // just-recorded event is more likely to be a label flicker than a
-            // genuinely new card. Apply this narrow stationary guard only to
-            // that risky one-frame path; confirmed two-frame cards are allowed
-            // to follow closely.
-            if includeStationarySingleFrameGuard,
-               recent.velocity.magnitude < minimumMotionSpeed,
-               distance <= 0.07 {
-                return true
-            }
-
-            guard recent.velocity.magnitude >= minimumMotionSpeed,
-                  track.velocity.magnitude >= minimumMotionSpeed else {
-                continue
-            }
-            let displacement = CGPoint(
-                x: track.box.center.x - recent.box.center.x,
-                y: track.box.center.y - recent.box.center.y
-            )
-            let direction = recent.velocity
-            let directionMagnitude = max(0.001, direction.magnitude)
-            let forwardDistance = (displacement.x * direction.x + displacement.y * direction.y)
-                / directionMagnitude
-            guard forwardDistance >= -0.04 else { continue }
-
-            let gate = max(0.06, min(0.13, recent.box.diagonal * 0.50))
-            if distance <= gate { return true }
+    /// When two labels both become stable in the same tiny region at the same
+    /// instant, neither is reliable enough to add to a permanent magic-deal
+    /// history. A real next card normally arrives after the previous one has
+    /// left the frame, so its older conflicting track is already stale.
+    private func hasUnresolvedLabelConflict(for track: Track, at date: Date) -> Bool {
+        guard let stableTrackCard = stableCard(in: track.votes)?.card else {
+            return false
         }
-        return false
+
+        return tracks.contains { other in
+            guard other.id != track.id,
+                  !other.wasRecorded,
+                  let stableOtherCard = stableCard(in: other.votes)?.card,
+                  stableOtherCard != stableTrackCard,
+                  date.timeIntervalSince(other.lastSeen) <= unresolvedLabelConflictWindow else {
+                return false
+            }
+            return describesSamePass(
+                box: track.box,
+                velocity: track.velocity,
+                at: date,
+                otherBox: other.box,
+                otherVelocity: other.velocity,
+                otherDate: other.lastSeen
+            )
+        }
+    }
+
+    private func hasRecentPassConflict(for track: Track, at date: Date) -> Bool {
+        recentRecordedPasses.contains { recent in
+            let elapsed = date.timeIntervalSince(recent.date)
+            guard elapsed >= 0, elapsed <= recentPassGuardWindow else { return false }
+            return describesSamePass(
+                box: track.box,
+                velocity: track.velocity,
+                at: date,
+                otherBox: recent.box,
+                otherVelocity: recent.velocity,
+                otherDate: recent.date
+            )
+        }
+    }
+
+    private func describesSamePass(
+        box: CGRect,
+        velocity: CGPoint,
+        at date: Date,
+        otherBox: CGRect,
+        otherVelocity: CGPoint,
+        otherDate: Date
+    ) -> Bool {
+        let elapsed = max(0, min(maximumPredictionGap, date.timeIntervalSince(otherDate)))
+        let predictedOtherCenter = CGPoint(
+            x: otherBox.center.x + otherVelocity.x * elapsed,
+            y: otherBox.center.y + otherVelocity.y * elapsed
+        )
+        let predictedOtherBox = otherBox.offsetBy(
+            dx: predictedOtherCenter.x - otherBox.center.x,
+            dy: predictedOtherCenter.y - otherBox.center.y
+        )
+        let overlap = box.intersectionOverUnion(with: predictedOtherBox)
+        let distance = box.center.distance(to: predictedOtherCenter)
+        let distanceGate = min(
+            0.12,
+            max(0.045, min(box.diagonal, otherBox.diagonal) * 0.45
+                + velocity.magnitude * elapsed * 0.25)
+        )
+        return overlap >= 0.34 || distance <= distanceGate
     }
 }
 

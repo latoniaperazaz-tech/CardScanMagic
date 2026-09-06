@@ -1,5 +1,6 @@
 import CoreVideo
 import Foundation
+import ImageIO
 
 /// Owns all off-main-thread recognition state. At most one Core ML request runs
 /// at once so camera frames cannot build an inference backlog.
@@ -70,12 +71,17 @@ final class ScanPipeline {
         return sessionID
     }
 
-    func submit(pixelBuffer: CVPixelBuffer, timestamp: TimeInterval) {
+    func submit(
+        pixelBuffer: CVPixelBuffer,
+        timestamp: TimeInterval,
+        orientation: CGImagePropertyOrientation
+    ) {
         guard let sessionID = sessionGate.activeSessionForSampling() else { return }
         let inferenceAvailable = sessionGate.canStartInference(for: sessionID)
         guard let selectedFrame = frameSampler.select(
             pixelBuffer: pixelBuffer,
             timestamp: timestamp,
+            orientation: orientation,
             allowsInference: inferenceAvailable
         ), sessionGate.beginInference(for: sessionID) else {
             return
@@ -90,10 +96,11 @@ final class ScanPipeline {
             }
 
             do {
-                let detections = try engine.recognize(pixelBuffer: selectedFrame.0)
+                let detections = try engine.recognize(
+                    pixelBuffer: selectedFrame.0,
+                    orientation: selectedFrame.2
+                )
                 guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
-
-                self.onDetections?(sessionID, detections)
 
                 // Use the camera sample's monotonic timestamp rather than the
                 // wall-clock time at which Vision happens to finish.  Model
@@ -101,9 +108,14 @@ final class ScanPipeline {
                 // makes a fast pass look stationary and breaks track timeout
                 // and duplicate cooldown decisions.
                 let captureDate = Date(timeIntervalSinceReferenceDate: selectedFrame.1)
-                let records = self.coordinator.process(detections, at: captureDate)
-                guard self.sessionGate.shouldDeliver(for: sessionID), !records.isEmpty else { return }
-                self.onRecords?(sessionID, records)
+                let update = self.coordinator.processUpdate(detections, at: captureDate)
+                guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
+
+                // Never draw raw model output. The UI only receives tracks
+                // whose label and geometry have survived confirmation.
+                self.onDetections?(sessionID, update.stableDetections)
+                guard !update.records.isEmpty else { return }
+                self.onRecords?(sessionID, update.records)
             } catch {
                 guard self.sessionGate.failCurrentSession(for: sessionID) else { return }
                 self.onError?(sessionID, error)

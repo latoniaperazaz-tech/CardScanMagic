@@ -17,8 +17,12 @@ final class ScanViewModel: ObservableObject {
     private var startRequestID: UInt64 = 0
 
     init() {
-        camera.onFrame = { [weak self] pixelBuffer, timestamp in
-            self?.pipeline.submit(pixelBuffer: pixelBuffer, timestamp: timestamp)
+        camera.onFrame = { [weak self] pixelBuffer, timestamp, orientation in
+            self?.pipeline.submit(
+                pixelBuffer: pixelBuffer,
+                timestamp: timestamp,
+                orientation: orientation
+            )
         }
         camera.onError = { [weak self] error in
             Task { @MainActor in

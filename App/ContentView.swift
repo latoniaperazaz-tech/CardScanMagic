@@ -15,6 +15,11 @@ struct ContentView: View {
                     session: viewModel.camera.session,
                     detections: viewModel.detections
                 )
+                // UIViewRepresentable has no useful intrinsic size. Give the
+                // preview the actual screen dimensions so it cannot collapse
+                // to a camera-sized strip on an iPhone 14 Pro.
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
                 .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -31,8 +36,10 @@ struct ContentView: View {
                 }
                 .ignoresSafeArea(edges: .bottom)
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
             .background(Color.black)
         }
+        .ignoresSafeArea()
         .preferredColorScheme(.dark)
         .task {
             viewModel.startScanningIfNeeded()

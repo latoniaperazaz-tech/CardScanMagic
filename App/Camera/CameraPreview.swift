@@ -17,9 +17,10 @@ struct CameraPreview: UIViewRepresentable {
     }
 }
 
-/// The overlay is laid out by AVCaptureVideoPreviewLayer itself. With
-/// `.resizeAspectFill`, raw view-size multiplication is wrong because the
-/// camera image is cropped before it reaches the screen.
+/// The preview and Vision both work in portrait display coordinates. The
+/// overlay reproduces `.resizeAspectFill` from the dimensions carried by each
+/// Vision result, which avoids mixing a landscape capture buffer with a
+/// portrait preview-layer metadata coordinate system.
 final class PreviewView: UIView {
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
 
@@ -46,6 +47,7 @@ final class PreviewView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        previewLayer.frame = bounds
         overlayView.frame = bounds
         redrawDetections()
     }
@@ -101,7 +103,10 @@ final class PreviewView: UIView {
         UIView.performWithoutAnimation {
             for (index, detection) in visibleDetections.enumerated() {
                 let boxView = detectionViews[index]
-                let rect = overlayRect(for: detection.boundingBox)
+                let rect = overlayRect(
+                    for: detection.boundingBox,
+                    imageSize: detection.orientedImageSize
+                )
                 let isVisible = !rect.isNull && !rect.isEmpty && rect.intersects(bounds)
 
                 boxView.isHidden = !isVisible
@@ -116,22 +121,46 @@ final class PreviewView: UIView {
         }
     }
 
-    private func overlayRect(for visionRect: CGRect) -> CGRect {
+    private func overlayRect(for visionRect: CGRect, imageSize: CGSize) -> CGRect {
         let unitRect = CGRect(x: 0, y: 0, width: 1, height: 1)
         let clippedVisionRect = visionRect.standardized.intersection(unitRect)
         guard !clippedVisionRect.isNull, !clippedVisionRect.isEmpty else {
             return .null
         }
 
-        // Vision has a lower-left origin. Metadata output coordinates use the
-        // upper-left origin consumed by AVCaptureVideoPreviewLayer.
-        let metadataRect = CGRect(
-            x: clippedVisionRect.minX,
-            y: 1 - clippedVisionRect.maxY,
-            width: clippedVisionRect.width,
-            height: clippedVisionRect.height
+        guard imageSize.width.isFinite,
+              imageSize.height.isFinite,
+              imageSize.width > 0,
+              imageSize.height > 0,
+              !bounds.isEmpty else {
+            return .null
+        }
+
+        // Vision's normalized rectangles have a lower-left origin. Convert to
+        // the portrait image's upper-left coordinates, then apply the same
+        // aspect-fill crop used by the preview layer. Calling
+        // `layerRectConverted` here would make the result depend on the raw
+        // camera buffer orientation and was the source of the thin vertical
+        // boxes seen on device.
+        let imageToViewScale = max(
+            bounds.width / imageSize.width,
+            bounds.height / imageSize.height
         )
-        return previewLayer.layerRectConverted(fromMetadataOutputRect: metadataRect)
+        let renderedSize = CGSize(
+            width: imageSize.width * imageToViewScale,
+            height: imageSize.height * imageToViewScale
+        )
+        let imageOrigin = CGPoint(
+            x: (bounds.width - renderedSize.width) / 2,
+            y: (bounds.height - renderedSize.height) / 2
+        )
+        let topLeftY = 1 - clippedVisionRect.maxY
+        return CGRect(
+            x: imageOrigin.x + clippedVisionRect.minX * renderedSize.width,
+            y: imageOrigin.y + topLeftY * renderedSize.height,
+            width: clippedVisionRect.width * renderedSize.width,
+            height: clippedVisionRect.height * renderedSize.height
+        )
     }
 }
 

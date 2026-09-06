@@ -16,7 +16,7 @@ final class CardEventCoordinatorTests: XCTestCase {
         let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
         let detection = CardDetection(
             card: aceHearts,
-            confidence: 0.74,
+            confidence: 0.90,
             boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3)
         )
         let start = Date(timeIntervalSinceReferenceDate: 100)
@@ -51,8 +51,8 @@ final class CardEventCoordinatorTests: XCTestCase {
             CardDetection(card: card, confidence: confidence, boundingBox: box)
         }
 
-        XCTAssertTrue(coordinator.process([detection(aceHearts, 0.75)], at: start).isEmpty)
-        XCTAssertTrue(coordinator.process([detection(aceHearts, 0.76)], at: start.addingTimeInterval(0.04)).isEmpty == false)
+        XCTAssertTrue(coordinator.process([detection(aceHearts, 0.90)], at: start).isEmpty)
+        XCTAssertTrue(coordinator.process([detection(aceHearts, 0.91)], at: start.addingTimeInterval(0.04)).isEmpty == false)
         // A later sharp but conflicting label must not create a second record.
         XCTAssertTrue(coordinator.process([detection(sevenHearts, 0.98)], at: start.addingTimeInterval(0.08)).isEmpty)
     }
@@ -65,7 +65,7 @@ final class CardEventCoordinatorTests: XCTestCase {
         let box = CGRect(x: 0.35, y: 0.3, width: 0.2, height: 0.3)
 
         func detection(_ card: CardFace) -> CardDetection {
-            CardDetection(card: card, confidence: 0.76, boundingBox: box)
+            CardDetection(card: card, confidence: 0.90, boundingBox: box)
         }
 
         XCTAssertTrue(coordinator.process([detection(aceHearts)], at: start).isEmpty)
@@ -105,7 +105,7 @@ final class CardEventCoordinatorTests: XCTestCase {
         func detection(x: CGFloat) -> CardDetection {
             CardDetection(
                 card: aceHearts,
-                confidence: 0.74,
+                confidence: 0.90,
                 boundingBox: CGRect(x: x, y: 0.3, width: 0.16, height: 0.26)
             )
         }
@@ -120,7 +120,7 @@ final class CardEventCoordinatorTests: XCTestCase {
         let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
         let detection = CardDetection(
             card: aceHearts,
-            confidence: 0.74,
+            confidence: 0.90,
             boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3)
         )
         let start = Date(timeIntervalSinceReferenceDate: 100)
@@ -142,7 +142,7 @@ final class CardEventCoordinatorTests: XCTestCase {
         func detection(_ card: CardFace, x: CGFloat) -> CardDetection {
             CardDetection(
                 card: card,
-                confidence: 0.74,
+                confidence: 0.90,
                 boundingBox: CGRect(x: x, y: 0.3, width: 0.2, height: 0.3)
             )
         }
@@ -153,6 +153,28 @@ final class CardEventCoordinatorTests: XCTestCase {
 
         _ = coordinator.process([detection(sevenHearts, x: 0.7)], at: start.addingTimeInterval(0.9))
         XCTAssertEqual(coordinator.process([detection(sevenHearts, x: 0.7)], at: start.addingTimeInterval(0.98)).count, 1)
+    }
+
+    func testOverlayOnlyContainsAConfirmedTrack() throws {
+        let coordinator = CardEventCoordinator()
+        let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
+        let detection = CardDetection(
+            card: aceHearts,
+            confidence: 0.92,
+            boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3)
+        )
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+
+        let first = coordinator.processUpdate([detection], at: start)
+        XCTAssertTrue(first.records.isEmpty)
+        XCTAssertTrue(first.stableDetections.isEmpty)
+
+        let second = coordinator.processUpdate(
+            [detection],
+            at: start.addingTimeInterval(0.04)
+        )
+        XCTAssertEqual(second.records.map(\.card), [aceHearts])
+        XCTAssertEqual(second.stableDetections.map(\.card), [aceHearts])
     }
 
 }

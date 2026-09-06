@@ -1,5 +1,6 @@
 import CoreVideo
 import Foundation
+import ImageIO
 
 /// Samples a high-frame-rate camera stream without making Core ML compete for
 /// every frame. The most recent sufficiently sharp frame wins a short window.
@@ -7,6 +8,7 @@ final class SharpFrameSampler {
     private struct CandidateBuffer {
         let pixelBuffer: CVPixelBuffer
         let timestamp: TimeInterval
+        let orientation: CGImagePropertyOrientation
     }
 
     private let inferenceInterval: TimeInterval
@@ -36,8 +38,9 @@ final class SharpFrameSampler {
     func select(
         pixelBuffer: CVPixelBuffer,
         timestamp: TimeInterval,
+        orientation: CGImagePropertyOrientation,
         allowsInference: Bool
-    ) -> (CVPixelBuffer, TimeInterval)? {
+    ) -> (CVPixelBuffer, TimeInterval, CGImagePropertyOrientation)? {
         guard timestamp.isFinite else { return nil }
 
         stateLock.lock()
@@ -58,7 +61,11 @@ final class SharpFrameSampler {
             }
 
             if candidateWindow.insert(timestamp: timestamp, sharpness: sharpness) {
-                candidateBuffer = CandidateBuffer(pixelBuffer: pixelBuffer, timestamp: timestamp)
+                candidateBuffer = CandidateBuffer(
+                    pixelBuffer: pixelBuffer,
+                    timestamp: timestamp,
+                    orientation: orientation
+                )
             }
             let selected = takeCandidateIfReady(at: timestamp, allowsInference: allowsInference)
             stateLock.unlock()
@@ -84,7 +91,7 @@ final class SharpFrameSampler {
     private func takeCandidateIfReady(
         at timestamp: TimeInterval,
         allowsInference: Bool
-    ) -> (CVPixelBuffer, TimeInterval)? {
+    ) -> (CVPixelBuffer, TimeInterval, CGImagePropertyOrientation)? {
         guard allowsInference, timestamp >= nextInferenceTime,
               let metadata = candidateWindow.take(at: timestamp),
               let buffer = candidateBuffer,
@@ -94,7 +101,7 @@ final class SharpFrameSampler {
 
         candidateBuffer = nil
         nextInferenceTime = timestamp + inferenceInterval
-        return (buffer.pixelBuffer, metadata.timestamp)
+        return (buffer.pixelBuffer, metadata.timestamp, buffer.orientation)
     }
 }
 
@@ -114,7 +121,7 @@ private enum FrameQuality {
         guard width > 16, height > 16 else { return 0 }
 
         // A coarse luma grid is enough to reject motion blur and avoids doing
-        // 240 full-frame quality passes per second on the camera queue.
+        // a full-frame quality pass for every high-rate camera frame.
         let step = max(8, min(width, height) / 42)
         var total: Double = 0
         var samples = 0
