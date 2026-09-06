@@ -4,6 +4,8 @@ struct ContentView: View {
     @StateObject private var viewModel = ScanViewModel()
     @State private var isRecordsExpanded = false
     @State private var isPresentationMode = false
+    @State private var clearFeedbackID = 0
+    @State private var isShowingClearConfirmation = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -70,6 +72,10 @@ struct ContentView: View {
         }
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
+        // A short, native confirmation makes it immediately clear that the
+        // reset control received the tap, even when there were no cards in
+        // the history to visibly remove.
+        .sensoryFeedback(.success, trigger: clearFeedbackID)
         .task {
             viewModel.startScanningIfNeeded()
         }
@@ -94,10 +100,10 @@ struct ContentView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             topControl(
-                systemImage: "trash",
-                tint: .black,
+                systemImage: isShowingClearConfirmation ? "checkmark" : "trash",
+                tint: isShowingClearConfirmation ? .green : .black,
                 foreground: .white,
                 accessibilityLabel: "清空本次记录",
                 action: { clearCurrentRound() }
@@ -107,8 +113,9 @@ struct ContentView: View {
             // preview and made this control appear unresponsive on device.
             .accessibilityHint("点按立即清空本手记录并重置识别状态")
             // Leave a little more clearance below the Dynamic Island for the
-            // reset control without moving the scan status or pause button.
-            .offset(y: 10)
+            // reset control without creating a visual and hit-test position
+            // mismatch. Padding participates in layout; offset does not.
+            .padding(.top, 10)
 
             statusReadout
 
@@ -138,7 +145,7 @@ struct ContentView: View {
             .disabled(viewModel.isPreparing || viewModel.isRoundComplete)
             .opacity(viewModel.isPreparing || viewModel.isRoundComplete ? 0.58 : 1)
             // Match the reset control's clearance below the Dynamic Island.
-            .offset(y: 10)
+            .padding(.top, 10)
         }
         .padding(.horizontal, 16)
         .foregroundStyle(.white)
@@ -166,16 +173,28 @@ struct ContentView: View {
 
                 Spacer(minLength: 4)
 
-                Image(systemName: "calculator")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.62))
-                    .frame(width: 24, height: 32)
+                // This used to be only a faint icon, which made the direct
+                // calculator entry easy to overlook on a live camera view.
+                // The entire status capsule remains the tap target.
+                VStack(spacing: 1) {
+                    Image(systemName: "calculator")
+                        .font(.subheadline.weight(.semibold))
+
+                    Text("计算器")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(.white.opacity(0.78))
+                .frame(width: 48, height: 36)
+                .background(.white.opacity(0.10), in: Capsule())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .frame(height: 48)
             .background(.black.opacity(0.72), in: Capsule())
-            .contentShape(Capsule())
+            // Make the full allotted capsule slot tappable, including its
+            // square corners. This is more forgiving than limiting touches
+            // to the visible rounded outline.
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("进入演示计算器")
@@ -198,8 +217,19 @@ struct ContentView: View {
 
     private func clearCurrentRound() {
         viewModel.clearRecords()
+        clearFeedbackID += 1
         withAnimation(.easeInOut(duration: 0.18)) {
             isRecordsExpanded = false
+            isShowingClearConfirmation = true
+        }
+
+        let feedbackID = clearFeedbackID
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(750))
+            guard clearFeedbackID == feedbackID else { return }
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isShowingClearConfirmation = false
+            }
         }
     }
 
@@ -222,10 +252,10 @@ struct ContentView: View {
                 }
         }
         .buttonStyle(.plain)
-        // Keep a comfortable 52pt target even if the SF Symbol's intrinsic
-        // bounds are smaller than the visible circle.
-        .frame(width: 52, height: 52)
-        .contentShape(Circle())
+        // The 48pt circle stays visually compact, while the invisible
+        // 56pt rectangular target is easier to hit during a performance.
+        .frame(width: 56, height: 56)
+        .contentShape(Rectangle())
         .accessibilityLabel(accessibilityLabel)
     }
 
