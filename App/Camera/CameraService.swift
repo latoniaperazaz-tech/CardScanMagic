@@ -89,13 +89,30 @@ final class CameraService: NSObject {
         }
     }
 
+    /// Prefer a virtual rear-camera device when the phone offers one. On an
+    /// iPhone 14 Pro this lets AVFoundation move from the wide lens to the
+    /// close-focus macro lens as a card passes very near the camera. Older
+    /// phones retain the same physical-wide-camera fallback as before.
+    private func preferredRearCamera() -> AVCaptureDevice? {
+        let preferredTypes: [AVCaptureDevice.DeviceType] = [
+            .builtInTripleCamera,
+            .builtInDualWideCamera,
+            .builtInWideAngleCamera
+        ]
+        let devices = AVCaptureDevice.DiscoverySession(
+            deviceTypes: preferredTypes,
+            mediaType: .video,
+            position: .back
+        ).devices
+
+        return preferredTypes.compactMap { type in
+            devices.first { $0.deviceType == type }
+        }.first
+    }
+
     private func configureIfNeeded() throws -> Int {
         guard !isConfigured else { return configuredFrameRate }
-        guard let camera = AVCaptureDevice.default(
-            .builtInWideAngleCamera,
-            for: .video,
-            position: .back
-        ) else {
+        guard let camera = preferredRearCamera() else {
             throw CameraError.noRearCamera
         }
 
@@ -152,10 +169,12 @@ final class CameraService: NSObject {
     private func configureBestFrameRate(for camera: AVCaptureDevice) -> Int {
         // The neural model is intentionally capped near 30 inferences/sec, so
         // 240 capture fps only makes individual frames darker indoors without
-        // yielding more model decisions. 120 fps still gives several sharp
-        // samples for a fast deal while leaving twice as much exposure time.
+        // yielding more model decisions. A virtual macro-capable camera gets
+        // 60 fps first: it doubles available exposure time and gives autofocus
+        // a stable close-card image, while still sampling more frames than the
+        // recognizer consumes. Other phones retain the 120 fps preference.
         // Prefer 1080p formats, then fall back to the clearest supported mode.
-        let desiredRates = [120, 60]
+        let desiredRates = camera.isAutoMacroSupported ? [60, 120] : [120, 60]
         let formats = camera.formats.compactMap { format -> (format: AVCaptureDevice.Format, width: Int32, height: Int32, rate: Int)? in
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             guard let rate = desiredRates.first(where: { supports(frameRate: Double($0), in: format) }) else {
@@ -196,6 +215,9 @@ final class CameraService: NSObject {
             }
             if camera.isAutoFocusRangeRestrictionSupported {
                 camera.autoFocusRangeRestriction = .near
+            }
+            if camera.isAutoMacroSupported {
+                camera.isAutoMacroEnabled = true
             }
             if let selected {
                 return selected.rate

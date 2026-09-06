@@ -64,7 +64,11 @@ final class CardEventCoordinator {
     private let minimumDetectionConfidence: Float = 0.45
     private let minimumConfirmedConfidence: Float = 0.58
     private let minimumBoxArea: CGFloat = 0.0007
-    private let minimumVisibleFraction: CGFloat = 0.35
+    // A close card can legitimately enter with its printed corner partly at
+    // the edge of the frame. The two-frame, same-label confirmation below is
+    // a much stronger false-positive guard than discarding that useful first
+    // edge observation outright.
+    private let minimumVisibleFraction: CGFloat = 0.20
     private let minimumShortSide: CGFloat = 0.015
     private let minimumShortSidePixels: CGFloat = 18
     private let minimumShortToLongAspect: CGFloat = 0.20
@@ -73,7 +77,16 @@ final class CardEventCoordinator {
     private let trackTimeout: TimeInterval = 0.38
     private let initialLinkWindow: TimeInterval = 0.09
     private let minimumOverlap: CGFloat = 0.02
-    private let maximumAreaDifference: CGFloat = 0.60
+    // A near card grows substantially between two 30 fps inference samples.
+    // The first bridge is intentionally looser because it still requires the
+    // same label plus spatial continuity before receiving its second vote.
+    // Once a track exists, retain a tighter gate so neighbouring physical
+    // cards are not inadvertently merged.
+    // 0.92 permits roughly a 12x area jump on the first bridge. That is
+    // realistic when a card moves from the normal wide-camera focus range
+    // into the 14 Pro's macro range between two 30 fps model inputs.
+    private let maximumInitialAreaDifference: CGFloat = 0.92
+    private let maximumTrackedAreaDifference: CGFloat = 0.72
     private let maximumPredictionGap: TimeInterval = 0.35
     private let maximumTrackSpeed: CGFloat = 8.0
     private let unresolvedLabelConflictWindow: TimeInterval = 0.075
@@ -276,6 +289,9 @@ final class CardEventCoordinator {
             let trackArea = max(0.0001, track.box.area)
             let detectionArea = max(0.0001, detection.boundingBox.area)
             let sizeDifference = abs(trackArea - detectionArea) / max(trackArea, detectionArea)
+            let maximumAreaDifference = track.hitCount == 1
+                ? maximumInitialAreaDifference
+                : maximumTrackedAreaDifference
             guard sizeDifference <= maximumAreaDifference else { continue }
 
             let predictionAge = min(age, maximumPredictionGap)

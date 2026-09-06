@@ -57,4 +57,18 @@ final class FrameCandidateWindowTests: XCTestCase {
         XCTAssertFalse(window.insert(timestamp: 9.99, sharpness: 50))
         XCTAssertEqual(window.candidate, FrameCandidateMetadata(timestamp: 10, sharpness: 25))
     }
+
+    func testRecentModeratelySofterForegroundFrameSupersedesOldBackground() {
+        var window = FrameCandidateWindow(maximumAge: 0.055, recencySharpnessRatio: 0.55)
+
+        XCTAssertTrue(window.insert(timestamp: 10, sharpness: 100))
+        // A close card can lower global luma sharpness while it is still
+        // readable. Prefer this fresh card frame over an older empty table.
+        XCTAssertTrue(window.insert(timestamp: 10.025, sharpness: 58))
+
+        XCTAssertEqual(
+            window.candidate,
+            FrameCandidateMetadata(timestamp: 10.025, sharpness: 58)
+        )
+    }
 }

@@ -14,11 +14,13 @@ The app is currently tuned for one 炸金花 hand: it accepts at most three uniq
 cards per round. After the third confirmed card it stops the camera automatically
 and keeps the three-card result on screen. Tap Clear before the next hand.
 
-- Requests the rear camera and prefers a clear 1920x1080 stream. It uses 120
-  fps by default, then 60 fps if the device does not expose a suitable 120 fps
-  format. 240 fps is intentionally not the default: it shortens exposure in
-  ordinary indoor light without increasing the model's roughly 30 inferences
-  per second.
+- Requests the best available rear camera. On a multi-camera iPhone such as
+  the 14 Pro it uses the virtual rear camera with automatic macro enabled, so
+  a card brought close to the lens can switch to the close-focusing camera.
+  It prefers 60 fps for that mode to give autofocus and exposure enough time;
+  other devices use 120 fps when available, then 60 fps. 240 fps is
+  intentionally not the default: it shortens exposure in ordinary indoor
+  light without increasing the model's roughly 30 inferences per second.
 - Samples the high-frame-rate stream, retaining a sharp candidate frame instead
   of trying to run the neural model on every camera frame.
 - Detects the rank/suit corner anywhere in the frame, tracks it across time and

@@ -115,6 +115,54 @@ final class CardEventCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.process([detection(x: 0.66)], at: start.addingTimeInterval(0.08)).isEmpty)
     }
 
+    func testRapidlyGrowingNearCardBoxStillConfirms() throws {
+        let coordinator = CardEventCoordinator()
+        let queenSpades = try XCTUnwrap(CardFace.parse("Qs"))
+        let start = Date(timeIntervalSinceReferenceDate: 150)
+
+        // A card entering very close to the lens can grow several times in
+        // area between two model decisions. It is still the same card when
+        // its label and centre path agree, so it must receive the two votes
+        // needed to be recorded rather than becoming two one-frame tracks.
+        let distantCorner = CardDetection(
+            card: queenSpades,
+            confidence: 0.91,
+            boundingBox: CGRect(x: 0.42, y: 0.31, width: 0.035, height: 0.055)
+        )
+        let nearCorner = CardDetection(
+            card: queenSpades,
+            confidence: 0.92,
+            boundingBox: CGRect(x: 0.35, y: 0.21, width: 0.11, height: 0.17)
+        )
+
+        XCTAssertTrue(coordinator.process([distantCorner], at: start).isEmpty)
+        XCTAssertEqual(
+            coordinator.process([nearCorner], at: start.addingTimeInterval(0.045)).map(\.card),
+            [queenSpades]
+        )
+    }
+
+    func testPartiallyVisibleCloseCornerCanStillConfirm() throws {
+        let coordinator = CardEventCoordinator()
+        let kingDiamonds = try XCTUnwrap(CardFace.parse("Kd"))
+        let start = Date(timeIntervalSinceReferenceDate: 200)
+
+        // Vision can return a box slightly beyond the normalized image when a
+        // close card enters from the edge. Enough of the corner is visible to
+        // classify it, so keep it and let the second matching frame decide.
+        let edgeCorner = CardDetection(
+            card: kingDiamonds,
+            confidence: 0.88,
+            boundingBox: CGRect(x: -0.06, y: 0.32, width: 0.15, height: 0.19)
+        )
+
+        XCTAssertTrue(coordinator.process([edgeCorner], at: start).isEmpty)
+        XCTAssertEqual(
+            coordinator.process([edgeCorner], at: start.addingTimeInterval(0.04)).map(\.card),
+            [kingDiamonds]
+        )
+    }
+
     func testSameFaceIsNotRecordedAgainAfterThePreviousTrackLeaves() throws {
         let coordinator = CardEventCoordinator()
         let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
