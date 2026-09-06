@@ -26,6 +26,7 @@ struct ContentView: View {
                 // on some iOS releases, making the controls above it appear
                 // tappable while silently swallowing the touch.
                 .allowsHitTesting(false)
+                .zIndex(-1)
 
                 VStack(spacing: 0) {
                     topBar
@@ -150,32 +151,35 @@ struct ContentView: View {
     }
 
     private var statusReadout: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text("炸金花 · 三张牌")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.74))
+        Button(action: enterPresentationMode) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("炸金花 · 三张牌")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.74))
 
-            Text(viewModel.statusText)
-                .font(.subheadline.monospacedDigit().weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .frame(height: 48)
-        .background(.black.opacity(0.72), in: Capsule())
-        .accessibilityElement(children: .combine)
-        .contextMenu {
-            Button {
-                enterPresentationMode()
-            } label: {
-                Label("进入演示模式", systemImage: "theatermasks.fill")
+                    Text(viewModel.statusText)
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "calculator")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .frame(width: 24, height: 32)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .frame(height: 48)
+            .background(.black.opacity(0.72), in: Capsule())
+            .contentShape(Capsule())
         }
-        .accessibilityHint("长按打开操作菜单，可进入演示模式")
-        .accessibilityAction(named: Text("进入演示模式")) {
-            enterPresentationMode()
-        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("进入演示计算器")
+        .accessibilityHint("点按打开计算器表演界面；识别会继续在后台运行")
     }
 
     private func enterPresentationMode() {
