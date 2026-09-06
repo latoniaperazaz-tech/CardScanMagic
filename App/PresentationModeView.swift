@@ -47,7 +47,7 @@ struct PresentationModeView: View {
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .accessibilityLabel("计算器")
-        .accessibilityHint("识别仍在后台运行")
+        .accessibilityHint(isScanning ? "识别仍在后台运行" : "当前未在扫描")
     }
 
     private func header(safeTop: CGFloat) -> some View {
