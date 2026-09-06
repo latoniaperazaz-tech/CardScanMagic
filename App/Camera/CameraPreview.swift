@@ -67,6 +67,10 @@ final class PreviewView: UIView {
 
     private func configureView() {
         backgroundColor = .black
+        // This UIKit-backed view is display-only.  Disabling its own hit
+        // testing complements the SwiftUI wrapper setting and makes sure it
+        // cannot steal a top-bar tap on a physical device.
+        isUserInteractionEnabled = false
         previewLayer.videoGravity = .resizeAspectFill
 
         overlayView.backgroundColor = .clear

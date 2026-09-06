@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = ScanViewModel()
-    @State private var showingClearConfirmation = false
     @State private var isRecordsExpanded = false
     @State private var isPresentationMode = false
 
@@ -80,11 +79,6 @@ struct ContentView: View {
                 isRecordsExpanded = !isScanning
             }
         }
-        .confirmationDialog("清空本次记录？", isPresented: $showingClearConfirmation) {
-            Button("清空", role: .destructive) {
-                viewModel.clearRecords()
-            }
-        }
         .alert(
             "扫描提示",
             isPresented: Binding(
@@ -105,11 +99,12 @@ struct ContentView: View {
                 tint: .black,
                 foreground: .white,
                 accessibilityLabel: "清空本次记录",
-                action: { showingClearConfirmation = true }
+                action: { clearCurrentRound() }
             )
-            // Clearing is also a useful recovery action when a session is
-            // stuck at 0/3, so keep the control available in every state.
-            .accessibilityHint("清空本手记录并重置识别状态")
+            // A performance reset needs to happen on the first tap. An
+            // action-sheet confirmation was easy to miss over the live
+            // preview and made this control appear unresponsive on device.
+            .accessibilityHint("点按立即清空本手记录并重置识别状态")
 
             statusReadout
 
@@ -189,6 +184,13 @@ struct ContentView: View {
         guard isPresentationMode else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
             isPresentationMode = false
+        }
+    }
+
+    private func clearCurrentRound() {
+        viewModel.clearRecords()
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isRecordsExpanded = false
         }
     }
 
