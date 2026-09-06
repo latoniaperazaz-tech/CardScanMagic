@@ -34,6 +34,18 @@ final class RecognitionEngine {
     private static let nearTileSpan: CGFloat = 9.0 / 16.0
     private static let nearTileOverlap: CGFloat = 1.0 / 8.0
 
+    // Keep this preflight in sync with CardEventCoordinator's first-pass
+    // filters. Vision can return a low-confidence or tiny corner observation
+    // even when the close card itself is not yet readable. Such an observation
+    // must not suppress the magnified ROI pass, otherwise the coordinator will
+    // discard it later and the UI appears to do nothing.
+    private static let minimumFallbackConfidence: Float = 0.45
+    private static let minimumFallbackBoxArea: CGFloat = 0.0007
+    private static let minimumFallbackVisibleFraction: CGFloat = 0.20
+    private static let minimumFallbackShortSide: CGFloat = 0.015
+    private static let minimumFallbackShortToLongAspect: CGFloat = 0.20
+    private static let minimumFallbackShortSidePixels: CGFloat = 18
+
     private let fullFrameRequest: VNCoreMLRequest
     private let portraitNearRequests: [RegionRequest]
     private let landscapeNearRequests: [RegionRequest]
@@ -88,14 +100,17 @@ final class RecognitionEngine {
         try handler.perform([fullFrameRequest])
 
         // The full-frame pass is the normal path. A close card can occupy too
-        // few model pixels after scale-fit, so only an actually empty pass
-        // pays for the two magnified fallback requests.
+        // few model pixels after scale-fit, and Vision may still return a weak
+        // false observation. Only a result that could survive the coordinator
+        // is allowed to suppress the two magnified fallback requests.
         let fullFrameDetections = try detections(
             from: fullFrameRequest,
             region: nil,
             orientedImageSize: orientedImageSize
         )
-        guard fullFrameDetections.isEmpty else { return fullFrameDetections }
+        guard Self.shouldUseNearFallback(for: fullFrameDetections) else {
+            return fullFrameDetections
+        }
 
         let nearRequests = orientedImageSize.height >= orientedImageSize.width
             ? portraitNearRequests
@@ -147,6 +162,69 @@ final class RecognitionEngine {
                 orientedImageSize: orientedImageSize
             )
         }
+    }
+
+    /// Returns true when the normal full-frame result is too weak to trust.
+    /// The caller should run the magnified near-card tiles in that case.
+    ///
+    /// This is intentionally a little duplicate of CardEventCoordinator's
+    /// sanitization gate. RecognitionEngine needs the decision before handing
+    /// detections to the coordinator; sharing the same conservative values
+    /// prevents a weak result from short-circuiting the only useful fallback.
+    static func shouldUseNearFallback(for detections: [CardDetection]) -> Bool {
+        !detections.contains(where: isUsableFullFrameDetection)
+    }
+
+    private static func isUsableFullFrameDetection(_ detection: CardDetection) -> Bool {
+        guard detection.confidence.isFinite,
+              detection.confidence >= minimumFallbackConfidence,
+              detection.orientedImageSize.width.isFinite,
+              detection.orientedImageSize.height.isFinite,
+              detection.orientedImageSize.width > 0,
+              detection.orientedImageSize.height > 0 else {
+            return false
+        }
+
+        let unitRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+        let original = detection.boundingBox.standardized
+        guard original.minX.isFinite,
+              original.minY.isFinite,
+              original.maxX.isFinite,
+              original.maxY.isFinite,
+              original.width > 0,
+              original.height > 0 else {
+            return false
+        }
+
+        let originalArea = original.width * original.height
+        guard originalArea.isFinite, originalArea > 0 else { return false }
+
+        let clipped = original.intersection(unitRect)
+        guard !clipped.isNull,
+              clipped.width > 0,
+              clipped.height > 0 else {
+            return false
+        }
+
+        let clippedArea = clipped.width * clipped.height
+        guard clippedArea >= minimumFallbackBoxArea,
+              clippedArea / originalArea >= minimumFallbackVisibleFraction else {
+            return false
+        }
+
+        let shortSide = min(clipped.width, clipped.height)
+        let longSide = max(clipped.width, clipped.height)
+        guard shortSide >= minimumFallbackShortSide,
+              longSide > 0,
+              shortSide / longSide >= minimumFallbackShortToLongAspect else {
+            return false
+        }
+
+        let minimumImageSide = min(
+            detection.orientedImageSize.width,
+            detection.orientedImageSize.height
+        )
+        return minimumImageSide * shortSide >= minimumFallbackShortSidePixels
     }
 
     /// Returns two overlapping normalized regions covering the complete frame.

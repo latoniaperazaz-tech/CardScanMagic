@@ -42,4 +42,43 @@ final class RecognitionROITests: XCTestCase {
             ).isEmpty
         )
     }
+
+    func testWeakFullFrameDetectionDoesNotSuppressNearFallback() throws {
+        let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
+        let weakDetection = CardDetection(
+            card: aceHearts,
+            confidence: 0.44,
+            boundingBox: CGRect(x: 0.42, y: 0.31, width: 0.04, height: 0.06)
+        )
+
+        XCTAssertTrue(
+            RecognitionEngine.shouldUseNearFallback(for: [weakDetection])
+        )
+    }
+
+    func testTinyFullFrameDetectionDoesNotSuppressNearFallback() throws {
+        let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
+        let tinyDetection = CardDetection(
+            card: aceHearts,
+            confidence: 0.90,
+            boundingBox: CGRect(x: 0.42, y: 0.31, width: 0.01, height: 0.02)
+        )
+
+        XCTAssertTrue(
+            RecognitionEngine.shouldUseNearFallback(for: [tinyDetection])
+        )
+    }
+
+    func testUsableFullFrameDetectionSkipsNearFallback() throws {
+        let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
+        let usableDetection = CardDetection(
+            card: aceHearts,
+            confidence: 0.90,
+            boundingBox: CGRect(x: 0.42, y: 0.31, width: 0.04, height: 0.06)
+        )
+
+        XCTAssertFalse(
+            RecognitionEngine.shouldUseNearFallback(for: [usableDetection])
+        )
+    }
 }
