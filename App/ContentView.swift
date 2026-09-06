@@ -52,7 +52,9 @@ struct ContentView: View {
                     )
                     .frame(width: proxy.size.width, height: proxy.size.height)
                     .transition(.opacity)
-                    .zIndex(10)
+                    // The calculator must cover the scanner controls as well
+                    // as the camera preview while presentation mode is on.
+                    .zIndex(30)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -97,8 +99,9 @@ struct ContentView: View {
                 accessibilityLabel: "清空本次记录",
                 action: { showingClearConfirmation = true }
             )
-            .disabled(viewModel.records.isEmpty)
-            .opacity(viewModel.records.isEmpty ? 0.42 : 1)
+            // Clearing is also a useful recovery action when a session is
+            // stuck at 0/3, so keep the control available in every state.
+            .accessibilityHint("清空本手记录并重置识别状态")
 
             statusReadout
 

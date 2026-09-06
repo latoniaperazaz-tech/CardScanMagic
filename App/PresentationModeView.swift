@@ -1,5 +1,4 @@
 import Foundation
-import Foundation
 import SwiftUI
 
 /// A self-contained calculator surface for live performances.
@@ -100,7 +99,7 @@ struct PresentationModeView: View {
                 .minimumScaleFactor(0.32)
                 .allowsTightening(false)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .accessibilityLabel("当前结果 (calculator.display)")
+                .accessibilityLabel("当前结果 \(calculator.display)")
         }
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .bottomTrailing)
         .accessibilityElement(children: .combine)
@@ -109,8 +108,8 @@ struct PresentationModeView: View {
     private func keypad(keyWidth: CGFloat, gap: CGFloat) -> some View {
         VStack(spacing: gap) {
             HStack(spacing: gap) {
+                key(.backspace, width: keyWidth)
                 key(.clear, width: keyWidth)
-                key(.sign, width: keyWidth)
                 key(.percent, width: keyWidth)
                 key(.operation(.divide), width: keyWidth)
             }
@@ -137,7 +136,8 @@ struct PresentationModeView: View {
             }
 
             HStack(spacing: gap) {
-                key(.digit("0"), width: keyWidth * 2 + gap)
+                key(.sign, width: keyWidth)
+                key(.digit("0"), width: keyWidth)
                 key(.decimal, width: keyWidth)
                 key(.equals, width: keyWidth)
             }
@@ -149,7 +149,7 @@ struct PresentationModeView: View {
         Button {
             calculator.handle(key)
         } label: {
-            Text(key.title)
+            keyLabel(key)
                 .font(.system(size: key == .digit("0") ? 31 : 27, weight: .medium, design: .rounded))
                 .foregroundStyle(key.foregroundColor)
                 .frame(width: width, height: width)
@@ -158,6 +158,16 @@ struct PresentationModeView: View {
         }
         .buttonStyle(CalculatorKeyButtonStyle())
         .accessibilityLabel(key.accessibilityTitle)
+    }
+
+    @ViewBuilder
+    private func keyLabel(_ key: CalculatorKey) -> some View {
+        switch key {
+        case .backspace:
+            Image(systemName: "delete.left")
+        default:
+            Text(key.title)
+        }
     }
 }
 
@@ -187,6 +197,7 @@ private enum CalculatorOperation: Equatable {
 }
 
 private enum CalculatorKey: Equatable {
+    case backspace
     case clear
     case sign
     case percent
@@ -197,6 +208,7 @@ private enum CalculatorKey: Equatable {
 
     var title: String {
         switch self {
+        case .backspace: return "⌫"
         case .clear: return "AC"
         case .sign: return "±"
         case .percent: return "%"
@@ -209,6 +221,7 @@ private enum CalculatorKey: Equatable {
 
     var accessibilityTitle: String {
         switch self {
+        case .backspace: return "退格"
         case .clear: return "全部清除"
         case .sign: return "正负号"
         case .percent: return "百分号"
@@ -227,7 +240,7 @@ private enum CalculatorKey: Equatable {
 
     var backgroundColor: Color {
         switch self {
-        case .clear, .sign, .percent:
+        case .clear, .backspace, .sign, .percent:
             return Color(red: 0.64, green: 0.65, blue: 0.67)
         case .operation, .equals:
             return Color(red: 0.96, green: 0.57, blue: 0.08)
@@ -238,7 +251,7 @@ private enum CalculatorKey: Equatable {
 
     var foregroundColor: Color {
         switch self {
-        case .clear, .sign, .percent:
+        case .clear, .backspace, .sign, .percent:
             return .black
         default:
             return .white
@@ -260,6 +273,8 @@ private struct CalculatorState {
 
     mutating func handle(_ key: CalculatorKey) {
         switch key {
+        case .backspace:
+            backspace()
         case .digit(let digit):
             input(digit)
         case .decimal:
@@ -301,6 +316,18 @@ private struct CalculatorState {
             waitingForOperand = false
         } else if !display.contains(".") && display.count < 14 {
             display.append(".")
+        }
+    }
+
+    private mutating func backspace() {
+        guard !hasError, !waitingForOperand, !justEvaluated else { return }
+        guard display.count > 1 else {
+            display = "0"
+            return
+        }
+        display.removeLast()
+        if display == "-" || display.isEmpty {
+            display = "0"
         }
     }
 
@@ -381,7 +408,7 @@ private struct CalculatorState {
         case .subtract: result = lhs - rhs
         case .multiply: result = lhs * rhs
         case .divide:
-            guard abs(rhs) > .ulpOfOne else { return nil }
+            guard abs(rhs) > Double.ulpOfOne else { return nil }
             result = lhs / rhs
         }
         guard result.isFinite else { return nil }

@@ -61,21 +61,21 @@ final class CardEventCoordinator {
     // suit symbol), so full-card geometry thresholds discard every result.
     // Keep a modest per-frame confidence gate here; the two-frame vote below
     // remains the main protection against blur and table-texture false hits.
-    private let minimumDetectionConfidence: Float = 0.52
-    private let minimumConfirmedConfidence: Float = 0.60
+    private let minimumDetectionConfidence: Float = 0.45
+    private let minimumConfirmedConfidence: Float = 0.58
     private let minimumBoxArea: CGFloat = 0.0007
-    private let minimumVisibleFraction: CGFloat = 0.50
+    private let minimumVisibleFraction: CGFloat = 0.35
     private let minimumShortSide: CGFloat = 0.015
     private let minimumShortSidePixels: CGFloat = 18
     private let minimumShortToLongAspect: CGFloat = 0.20
-    private let confirmationWindow = 4
+    private let confirmationWindow = 5
     private let requiredMatchingVotes = 2
-    private let trackTimeout: TimeInterval = 0.24
+    private let trackTimeout: TimeInterval = 0.38
     private let initialLinkWindow: TimeInterval = 0.09
-    private let minimumOverlap: CGFloat = 0.12
-    private let maximumAreaDifference: CGFloat = 0.42
-    private let maximumPredictionGap: TimeInterval = 0.20
-    private let maximumTrackSpeed: CGFloat = 6.0
+    private let minimumOverlap: CGFloat = 0.02
+    private let maximumAreaDifference: CGFloat = 0.60
+    private let maximumPredictionGap: TimeInterval = 0.35
+    private let maximumTrackSpeed: CGFloat = 8.0
     private let unresolvedLabelConflictWindow: TimeInterval = 0.075
     private let recentPassGuardWindow: TimeInterval = 0.12
 
