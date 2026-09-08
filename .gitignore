@@ -6,3 +6,4 @@ CardScanMagic.xcodeproj/
 App/Models/CardDetector.mlpackage/
 App/Models/CardDetector.mlmodelc/
 App/Models/CardDetectorInfo.json
+outputs/

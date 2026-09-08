@@ -141,10 +141,28 @@ Ultralytics YOLO, whose upstream license has its own conditions. This starter
 project contains no Ultralytics source code, but you should review those terms
 before selling or distributing a closed-source product.
 
+## Partial Card Inference MVP
+
+The repository also contains an independent Python/OpenCV baseline for partial,
+cropped, rotated, or motion-blurred card faces. It does not train or require a
+52-class model and does not change the iOS recognition path. Install its small
+dependency set and run the diagnostic command:
+
+```bash
+python -m pip install -r requirements-partial.txt
+python debug_partial.py --image test.jpg
+```
+
+The command prints suit and A-10 candidate rankings, preserves `unknown` when
+evidence is weak, explains the winning pip-layout score, and saves an annotated
+`outputs/debug_test.jpg`. Add `--show` only on a machine with a desktop display.
+
 ## Project files
 
 - `App/`: SwiftUI iOS app and camera/recognition logic.
 - `scripts/export_coreml.py`: downloads and exports the upstream PyTorch model.
 - `project.yml`: XcodeGen project definition for a cloud Mac.
 - `Tests/`: logic tests for card-name parsing and duplicate prevention.
+- `src/`: classical partial-card templates, detectors, geometry and inference.
+- `debug_partial.py`: CLI report and annotated debug image generator.
 - `docs/plans/`: the approved first-version design.
