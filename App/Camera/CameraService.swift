@@ -32,9 +32,13 @@ final class CameraService: NSObject {
     private let sessionQueue = DispatchQueue(label: "com.cardscanmagic.camera.session")
     private let outputQueue = DispatchQueue(label: "com.cardscanmagic.camera.frames")
     private let runStateLock = NSLock()
+    private let diagnosticsLock = NSLock()
     private var isConfigured = false
     private var configuredFrameRate = 30
     private var wantsToRun = false
+    private var activeCamera: AVCaptureDevice?
+    private var diagnosticsStartTime: TimeInterval?
+    private var diagnosticsFrameCount = 0
     private let outputOrientation: AVCaptureVideoOrientation = .portrait
 
     func start() {
@@ -55,6 +59,7 @@ final class CameraService: NSObject {
                         }
                         return
                     }
+                    self.resetDiagnostics()
                     self.session.startRunning()
                     DispatchQueue.main.async { [weak self] in
                         UIApplication.shared.isIdleTimerDisabled = true
@@ -74,6 +79,7 @@ final class CameraService: NSObject {
             if self.session.isRunning {
                 self.session.stopRunning()
             }
+            self.resetDiagnostics()
             DispatchQueue.main.async { UIApplication.shared.isIdleTimerDisabled = false }
         }
     }
@@ -89,16 +95,13 @@ final class CameraService: NSObject {
         }
     }
 
-    /// Prefer a virtual rear-camera device when the phone offers one. On an
-    /// iPhone 14 Pro this gives AVFoundation its virtual multi-camera device,
-    /// allowing its normal automatic lens selection to choose a close-focus
-    /// constituent camera as a card passes very near the phone. Older phones
-    /// retain the same physical-wide-camera fallback as before.
+    /// Prefer the physical 1x camera so a fast card cannot trigger a virtual
+    /// device lens switch while it crosses the recognition zone.
     private func preferredRearCamera() -> AVCaptureDevice? {
         let preferredTypes: [AVCaptureDevice.DeviceType] = [
+            .builtInWideAngleCamera,
             .builtInTripleCamera,
-            .builtInDualWideCamera,
-            .builtInWideAngleCamera
+            .builtInDualWideCamera
         ]
         let devices = AVCaptureDevice.DiscoverySession(
             deviceTypes: preferredTypes,
@@ -116,6 +119,7 @@ final class CameraService: NSObject {
         guard let camera = preferredRearCamera() else {
             throw CameraError.noRearCamera
         }
+        activeCamera = camera
 
         let input = try AVCaptureDeviceInput(device: camera)
         let output = AVCaptureVideoDataOutput()
@@ -129,6 +133,7 @@ final class CameraService: NSObject {
         var wasConfigured = false
         defer {
             if !wasConfigured {
+                activeCamera = nil
                 if session.inputs.contains(where: { $0 === input }) {
                     session.removeInput(input)
                 }
@@ -146,7 +151,7 @@ final class CameraService: NSObject {
         guard session.canAddOutput(output) else { throw CameraError.cannotAddOutput }
         session.addOutput(output)
 
-        let frameRate = configureBestFrameRate(for: camera)
+        let frameRate = try configureBestFrameRate(for: camera)
         if let connection = output.connection(with: .video) {
             // Set the connection when the output supports it so the preview
             // and video-data stream use the same display orientation. This is
@@ -159,6 +164,11 @@ final class CameraService: NSObject {
             if connection.isVideoStabilizationSupported {
                 connection.preferredVideoStabilizationMode = .off
             }
+            logConfiguration(
+                camera: camera,
+                connection: connection,
+                frameRate: frameRate
+            )
         }
         isConfigured = true
         configuredFrameRate = frameRate
@@ -167,82 +177,103 @@ final class CameraService: NSObject {
     }
 
     @discardableResult
-    private func configureBestFrameRate(for camera: AVCaptureDevice) -> Int {
-        // The neural model is intentionally capped near 30 inferences/sec, so
-        // 240 capture fps only makes individual frames darker indoors without
-        // yielding more model decisions. A virtual multi-camera gets 60 fps
-        // first: it doubles available exposure time and gives its automatic
-        // close-focus lens switch a stable card image, while still sampling
-        // more frames than the recognizer consumes. Other phones retain the
-        // 120 fps preference.
-        // Prefer 1080p formats, then fall back to the clearest supported mode.
-        let usesVirtualRearCamera = [
-            AVCaptureDevice.DeviceType.builtInTripleCamera,
-            .builtInDualWideCamera
-        ].contains(camera.deviceType)
-        let desiredRates = usesVirtualRearCamera ? [60, 120] : [120, 60]
-        let formats = camera.formats.compactMap { format -> (format: AVCaptureDevice.Format, width: Int32, height: Int32, rate: Int)? in
+    private func configureBestFrameRate(for camera: AVCaptureDevice) throws -> Int {
+        // At 120 fps the sampler gets more chances to retain a sharp frame and
+        // auto exposure cannot consume more than one 1/120-second frame. The
+        // additional exposure ceiling below is what actually suppresses long
+        // subject-motion trails under sufficient light.
+        let desiredRates = CameraCapturePolicy.preferredFrameRates
+        let formats = camera.formats.enumerated().compactMap { index, format -> (format: AVCaptureDevice.Format, option: CameraFormatOption)? in
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             guard let rate = desiredRates.first(where: { supports(frameRate: Double($0), in: format) }) else {
                 return nil
             }
-            return (format, dimensions.width, dimensions.height, rate)
+            return (
+                format,
+                CameraFormatOption(
+                    index: index,
+                    width: dimensions.width,
+                    height: dimensions.height,
+                    frameRate: rate
+                )
+            )
         }
-        let preferredFormats = formats.filter {
-            hasDimensions($0.format, width: 1920, height: 1080)
-        }
-        let selectionPool = preferredFormats.isEmpty ? formats : preferredFormats
-        let selected = selectionPool
-            .sorted { lhs, rhs in
-                // `desiredRates` is ordered for image quality: on the virtual
-                // multi-camera the 60 fps format gives the close-focus lens
-                // twice the exposure time of 120 fps. Preserve that order
-                // instead of accidentally selecting the fastest format.
-                if lhs.rate != rhs.rate {
-                    let lhsPriority = desiredRates.firstIndex(of: lhs.rate) ?? desiredRates.count
-                    let rhsPriority = desiredRates.firstIndex(of: rhs.rate) ?? desiredRates.count
-                    return lhsPriority < rhsPriority
-                }
-                let lhsArea = Int64(lhs.width) * Int64(lhs.height)
-                let rhsArea = Int64(rhs.width) * Int64(rhs.height)
-                return lhsArea > rhsArea
-            }
-            .first
-
-        do {
-            try camera.lockForConfiguration()
-            defer { camera.unlockForConfiguration() }
-            if let selected {
-                camera.activeFormat = selected.format
-                let duration = CMTime(value: 1, timescale: CMTimeScale(selected.rate))
-                camera.activeVideoMinFrameDuration = duration
-                camera.activeVideoMaxFrameDuration = duration
-            }
-            if camera.isFocusModeSupported(.continuousAutoFocus) {
-                camera.focusMode = .continuousAutoFocus
-            }
-            if camera.isExposureModeSupported(.continuousAutoExposure) {
-                camera.exposureMode = .continuousAutoExposure
-            }
-            if camera.isSmoothAutoFocusSupported {
-                camera.isSmoothAutoFocusEnabled = false
-            }
-            if camera.isAutoFocusRangeRestrictionSupported {
-                camera.autoFocusRangeRestriction = .near
-            }
-            if let selected {
-                return selected.rate
-            }
-        } catch {
-            return 30
+        let selectedOption = CameraCapturePolicy.preferredFormat(
+            from: formats.map(\.option)
+        )
+        let selected = selectedOption.flatMap { option in
+            formats.first { $0.option.index == option.index }
         }
 
-        // A very old or unusual camera can have neither mode. Leave its
-        // default timing untouched instead of asking for an unsupported rate.
-        let maximumRate = camera.activeFormat.videoSupportedFrameRateRanges
+        try camera.lockForConfiguration()
+        defer { camera.unlockForConfiguration() }
+
+        let targetRate: Double
+        if let selected {
+            camera.activeFormat = selected.format
+            targetRate = Double(selected.option.frameRate)
+        } else {
+            // Keep the app usable on hardware without a 60/120 fps format, but
+            // set and report the active format's real maximum instead of
+            // claiming a requested rate that was never applied.
+            targetRate = maximumSupportedFrameRate(in: camera.activeFormat) ?? 30
+        }
+
+        setFrameDuration(for: camera, frameRate: targetRate)
+        if camera.isFocusModeSupported(.continuousAutoFocus) {
+            camera.focusMode = .continuousAutoFocus
+        }
+        if camera.isExposureModeSupported(.continuousAutoExposure) {
+            camera.exposureMode = .continuousAutoExposure
+            configureMaximumExposureDuration(for: camera)
+        }
+        if camera.isSmoothAutoFocusSupported {
+            camera.isSmoothAutoFocusEnabled = false
+        }
+        if camera.isAutoFocusRangeRestrictionSupported {
+            camera.autoFocusRangeRestriction = .near
+        }
+        if camera.isLowLightBoostSupported {
+            // Low-light boost can lengthen exposure and reintroduce subject
+            // trails. The exposure cap is more useful for this scan mode.
+            camera.automaticallyEnablesLowLightBoostWhenAvailable = false
+        }
+
+        let requestedZoom = 1.0
+        let clampedZoom = min(
+            max(requestedZoom, camera.minAvailableVideoZoomFactor),
+            camera.maxAvailableVideoZoomFactor
+        )
+        camera.videoZoomFactor = clampedZoom
+
+        return effectiveFrameRate(for: camera, fallback: targetRate)
+    }
+
+    private func maximumSupportedFrameRate(in format: AVCaptureDevice.Format) -> Double? {
+        let maximum = format.videoSupportedFrameRateRanges
             .map(\.maxFrameRate)
-            .max() ?? 30
-        return max(1, Int(maximumRate.rounded(.down)))
+            .max()
+        guard let maximum, maximum.isFinite, maximum > 0 else { return nil }
+        return maximum
+    }
+
+    private func setFrameDuration(for camera: AVCaptureDevice, frameRate: Double) {
+        guard frameRate.isFinite, frameRate > 0 else { return }
+        let duration = CMTime(
+            seconds: 1.0 / frameRate,
+            preferredTimescale: 1_000_000_000
+        )
+        camera.activeVideoMinFrameDuration = duration
+        camera.activeVideoMaxFrameDuration = duration
+    }
+
+    private func effectiveFrameRate(
+        for camera: AVCaptureDevice,
+        fallback: Double
+    ) -> Int {
+        let seconds = camera.activeVideoMaxFrameDuration.seconds
+        let rate = seconds.isFinite && seconds > 0 ? 1.0 / seconds : fallback
+        return max(1, Int(rate.rounded()))
     }
 
     private func supports(frameRate: Double, in format: AVCaptureDevice.Format) -> Bool {
@@ -251,9 +282,51 @@ final class CameraService: NSObject {
         }
     }
 
-    private func hasDimensions(_ format: AVCaptureDevice.Format, width: Int32, height: Int32) -> Bool {
-        let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-        return dimensions.width == width && dimensions.height == height
+    private func configureMaximumExposureDuration(for camera: AVCaptureDevice) {
+        let minimum = camera.activeFormat.minExposureDuration.seconds
+        let maximum = camera.activeFormat.maxExposureDuration.seconds
+        guard let seconds = CameraCapturePolicy.clampedMaximumExposureSeconds(
+            minimum: minimum,
+            maximum: maximum
+        ) else {
+            return
+        }
+        camera.activeMaxExposureDuration = CMTime(
+            seconds: seconds,
+            preferredTimescale: 1_000_000_000
+        )
+    }
+
+    private func logConfiguration(
+        camera: AVCaptureDevice,
+        connection: AVCaptureConnection,
+        frameRate: Int
+    ) {
+        let dimensions = CMVideoFormatDescriptionGetDimensions(
+            camera.activeFormat.formatDescription
+        )
+        let exposureCeiling = camera.activeMaxExposureDuration.seconds
+        let minimumDuration = camera.activeVideoMinFrameDuration.seconds
+        let maximumDuration = camera.activeVideoMaxFrameDuration.seconds
+        let supportedRange = camera.activeFormat.videoSupportedFrameRateRanges
+            .map { range in
+                String(format: "%.1f-%.1f", range.minFrameRate, range.maxFrameRate)
+            }
+            .joined(separator: ",")
+        print(
+            "[Camera] device=\(camera.localizedName) "
+                + "id=\(camera.uniqueID) "
+                + "type=\(camera.deviceType.rawValue) "
+                + "virtual=\(camera.isVirtualDevice) "
+                + "format=\(dimensions.width)x\(dimensions.height) "
+                + "configuredFPS=\(frameRate) "
+                + String(format: "frameDuration=%.6f-%.6fms ",
+                         minimumDuration * 1_000, maximumDuration * 1_000)
+                + "supportedFPS=\(supportedRange) "
+                + String(format: "zoom=%.2f ", camera.videoZoomFactor)
+                + String(format: "maxExposure=%.3fms ", exposureCeiling * 1_000)
+                + "stabilization=\(connection.activeVideoStabilizationMode.rawValue)"
+        )
     }
 
     private func report(_ error: Error) {
@@ -271,6 +344,13 @@ final class CameraService: NSObject {
         wantsToRun = value
         runStateLock.unlock()
     }
+
+    private func resetDiagnostics() {
+        diagnosticsLock.lock()
+        diagnosticsStartTime = nil
+        diagnosticsFrameCount = 0
+        diagnosticsLock.unlock()
+    }
 }
 
 extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -281,6 +361,11 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
     ) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+        emitDiagnostics(
+            pixelBuffer: pixelBuffer,
+            timestamp: timestamp,
+            connection: connection
+        )
         // A video-data connection may expose either the sensor's native
         // landscape buffer or a physically rotated portrait buffer. Use the
         // dimensions of this exact sample rather than a one-time assumption
@@ -289,6 +374,45 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         // fallback is `.right`).
         let orientation = Self.visionOrientation(for: pixelBuffer)
         onFrame?(pixelBuffer, timestamp, orientation)
+    }
+
+    private func emitDiagnostics(
+        pixelBuffer: CVPixelBuffer,
+        timestamp: TimeInterval,
+        connection: AVCaptureConnection
+    ) {
+        guard isWantedToRun, timestamp.isFinite, let camera = activeCamera else { return }
+
+        diagnosticsLock.lock()
+        diagnosticsFrameCount += 1
+        guard let startTime = diagnosticsStartTime else {
+            diagnosticsStartTime = timestamp
+            diagnosticsFrameCount = 1
+            diagnosticsLock.unlock()
+            return
+        }
+        let elapsed = timestamp - startTime
+        guard elapsed >= 1.0 else {
+            diagnosticsLock.unlock()
+            return
+        }
+
+        let deliveredFPS = Double(diagnosticsFrameCount) / elapsed
+        diagnosticsStartTime = timestamp
+        diagnosticsFrameCount = 0
+        diagnosticsLock.unlock()
+
+        let exposureMilliseconds = camera.exposureDuration.seconds * 1_000
+        print(
+            "[Camera] delivered=\(CVPixelBufferGetWidth(pixelBuffer))x"
+                + "\(CVPixelBufferGetHeight(pixelBuffer)) "
+                + String(format: "fps=%.1f exposure=%.3fms ISO=%.0f ",
+                         deliveredFPS, exposureMilliseconds, camera.iso)
+                + String(format: "lens=%.3f ", camera.lensPosition)
+                + "focusAdjusting=\(camera.isAdjustingFocus) "
+                + "exposureAdjusting=\(camera.isAdjustingExposure) "
+                + "stabilization=\(connection.activeVideoStabilizationMode.rawValue)"
+        )
     }
 
     static func visionOrientation(for pixelBuffer: CVPixelBuffer) -> CGImagePropertyOrientation {

@@ -31,7 +31,12 @@ class Transform:
 
     def apply(self, points: np.ndarray) -> np.ndarray:
         homogeneous = np.column_stack((points, np.ones(len(points), dtype=np.float64)))
-        return homogeneous @ self.matrix.T
+        projected = homogeneous @ self.matrix.T
+        if self.matrix.shape == (3, 3):
+            denominator = projected[:, 2:3]
+            safe = np.where(np.abs(denominator) > 1e-8, denominator, np.nan)
+            return projected[:, :2] / safe
+        return projected
 
 
 def _template_points(template: CardTemplate) -> np.ndarray:
@@ -319,6 +324,98 @@ def _affine_refinement(
     return Transform(matrix=np.asarray(matrix, dtype=np.float64), kind="affine_ransac", plausibility=plausibility)
 
 
+def _projective_refinement(
+    template_points: np.ndarray,
+    observations: list[Observation],
+    seed: Transform,
+) -> Transform | None:
+    """Refine a promising similarity fit when perspective is substantial."""
+
+    observed = np.array([observation.point for observation in observations])
+    seed_points = seed.apply(template_points)
+    if not np.all(np.isfinite(seed_points)):
+        return None
+    pairs = _greedy_assignment(
+        observed,
+        seed_points,
+        MATCH_TOLERANCE * 3.2,
+    )
+    if len(pairs) < 4:
+        return None
+
+    source = np.float32([template_points[template_index] for _, template_index, _ in pairs])
+    target = np.float32([observations[observed_index].point for observed_index, _, _ in pairs])
+    method = cv2.RANSAC if len(pairs) > 4 else 0
+    matrix, inliers = cv2.findHomography(
+        source,
+        target,
+        method=method,
+        ransacReprojThreshold=MATCH_TOLERANCE * 0.9,
+        maxIters=600,
+        confidence=0.97,
+    )
+    if matrix is None or not np.all(np.isfinite(matrix)) or abs(matrix[2, 2]) < 1e-8:
+        return None
+    if inliers is not None and int(inliers.sum()) < 4:
+        return None
+    return _validated_projective_transform(matrix, template_points)
+
+
+def _validated_projective_transform(
+    matrix: np.ndarray,
+    template_points: np.ndarray,
+) -> Transform | None:
+    matrix = np.asarray(matrix, dtype=np.float64)
+    if matrix.shape != (3, 3) or not np.all(np.isfinite(matrix)) or abs(matrix[2, 2]) < 1e-8:
+        return None
+    matrix = matrix / matrix[2, 2]
+    denominators = np.column_stack((template_points, np.ones(len(template_points)))) @ matrix[2]
+    if np.any(np.abs(denominators) < 0.10):
+        return None
+    denominator_ratio = float(np.max(np.abs(denominators)) / np.min(np.abs(denominators)))
+    if denominator_ratio > 12.0:
+        return None
+    transformed = Transform(matrix=matrix, kind="homography").apply(template_points)
+    if not np.all(np.isfinite(transformed)):
+        return None
+    hull_area = float(cv2.contourArea(cv2.convexHull(np.float32(transformed))))
+    if hull_area < 0.002:
+        return None
+    plausibility = 0.96 * exp(-0.025 * max(0.0, denominator_ratio - 1.0))
+    return Transform(matrix=matrix, kind="homography", plausibility=plausibility)
+
+
+def _five_point_homographies(
+    template_points: np.ndarray,
+    observations: list[Observation],
+) -> list[Transform]:
+    """Map a four-point hull plus one interior point under perspective."""
+
+    if len(observations) != 5 or len(template_points) < 4:
+        return []
+    observed = np.float32([observation.point for observation in observations])
+    observed_hull = cv2.convexHull(observed, returnPoints=False)
+    if observed_hull is None or len(observed_hull) != 4:
+        return []
+    target_cycle = observed[observed_hull.ravel()]
+    transforms: list[Transform] = []
+    for indices in combinations(range(len(template_points)), 4):
+        source_subset = np.float32([template_points[index] for index in indices])
+        source_hull = cv2.convexHull(source_subset, returnPoints=False)
+        if source_hull is None or len(source_hull) != 4:
+            continue
+        source_cycle = source_subset[source_hull.ravel()]
+        for reverse in (False, True):
+            ordered_target = target_cycle[::-1] if reverse else target_cycle
+            for offset in range(4):
+                target = np.roll(ordered_target, offset, axis=0)
+                matrix = cv2.getPerspectiveTransform(source_cycle, target)
+                transform = _validated_projective_transform(matrix, template_points)
+                if transform is not None:
+                    transforms.append(transform)
+    return transforms
+
+
 def _best_template_score(
     template: CardTemplate,
     observations: list[Observation],
@@ -352,6 +449,8 @@ def _best_template_score(
         for template_point in template_points:
             transforms.extend(_single_point_transforms(template_point, observed_points[0]))
 
+    transforms.extend(_five_point_homographies(template_points, observations))
+
     if not transforms:
         return {
             "raw_score": 0.0,
@@ -370,13 +469,32 @@ def _best_template_score(
         _score_transform(template, template_points, observations, viewport, transform, visible_region)
         for transform in transforms
     ]
-    top_similarity = sorted(scored, key=lambda item: item["raw_score"], reverse=True)[:8]
-    for score in top_similarity:
+    top_similarity = sorted(scored, key=lambda item: item["raw_score"], reverse=True)[:36]
+    for score in top_similarity[:8]:
         refined = _affine_refinement(template_points, observations, score)
         if refined is not None:
             scored.append(
                 _score_transform(template, template_points, observations, viewport, refined, visible_region)
             )
+    if 4 <= len(observations) <= 8:
+        for score in top_similarity:
+            seed = Transform(
+                matrix=np.asarray(score["transform"]["matrix"], dtype=np.float64),
+                kind=str(score["transform"]["kind"]),
+                plausibility=float(score["transform"]["plausibility"]),
+            )
+            projective = _projective_refinement(template_points, observations, seed)
+            if projective is not None:
+                scored.append(
+                    _score_transform(
+                        template,
+                        template_points,
+                        observations,
+                        viewport,
+                        projective,
+                        visible_region,
+                    )
+                )
     return max(scored, key=lambda item: item["raw_score"])
 
 

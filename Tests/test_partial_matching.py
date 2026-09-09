@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from math import cos, radians, sin
 
+import cv2
+import numpy as np
 import pytest
 
 from src.features.pip_detector import detect_pips
@@ -97,6 +99,36 @@ def test_five_rotated_fifteen_degrees_is_first_candidate() -> None:
     assert top == "5"
 
 
+def test_five_under_strong_perspective_is_first_candidate() -> None:
+    source_corners = np.float32(
+        [[0, 0], [CARD_WIDTH, 0], [CARD_WIDTH, CARD_HEIGHT], [0, CARD_HEIGHT]]
+    )
+    target_corners = np.float32([[260, 80], [700, 190], [560, 1220], [180, 1100]])
+    homography = cv2.getPerspectiveTransform(source_corners, target_corners)
+    source_pips = np.float32(
+        [[[pip.x * CARD_WIDTH, pip.y * CARD_HEIGHT] for pip in get_template("5").pips]]
+    )
+    projected = cv2.perspectiveTransform(source_pips, homography)[0]
+    observations = [
+        {
+            "cx": float(x / 720),
+            "cy": float(y / 1280),
+            "center_px": [float(x), float(y)],
+            "shape_score": 0.86,
+        }
+        for x, y in projected
+    ]
+
+    result = infer_partial_rank(
+        observations,
+        _visible("unknown"),
+        image_shape=(1280, 720),
+    )
+
+    assert result["candidates"][0]["rank"] == "5"
+    assert result["candidates"][0]["details"]["transform"]["kind"] == "homography"
+
+
 @pytest.mark.parametrize("rank", ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"])
 def test_complete_number_layouts_rank_first(rank: str) -> None:
     top, _ = _top_rank(rank)
@@ -131,6 +163,23 @@ def test_pip_detector_keeps_five_pips_under_motion_blur() -> None:
     pips = detect_pips(image)
     assert len(pips) == 5
     assert all(pip["shape_score"] >= 0.28 for pip in pips)
+
+
+def test_pip_detector_keeps_red_pip_on_dim_masked_card() -> None:
+    image = np.full((427, 326, 3), 255, dtype=np.uint8)
+    card_polygon = np.array(
+        [[20, 20], [325, 25], [325, 310], [260, 370], [210, 420], [20, 405]],
+        dtype=np.int32,
+    )
+    cv2.fillConvexPoly(image, card_polygon, (120, 112, 124))
+    cv2.ellipse(image, (180, 215), (35, 23), -8, 0, 360, (70, 55, 150), -1)
+    image = cv2.GaussianBlur(image, (9, 9), 2)
+
+    pips = detect_pips(image)
+
+    red_pips = [pip for pip in pips if pip["color"] == "red"]
+    assert red_pips
+    assert np.linalg.norm(np.asarray(red_pips[0]["center_px"]) - (180, 215)) < 12
 
 
 @pytest.mark.parametrize("suit", ["diamond", "heart", "club", "spade"])

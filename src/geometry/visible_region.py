@@ -7,6 +7,8 @@ from typing import Any
 import cv2
 import numpy as np
 
+from .card_localizer import build_card_surface_mask
+
 REGIONS = (
     "top",
     "bottom",
@@ -31,23 +33,6 @@ def _normalize(values: dict[str, float]) -> dict[str, float]:
 
 def _base_probabilities() -> dict[str, float]:
     return {region: 0.0 for region in REGIONS}
-
-
-def _card_mask(image: np.ndarray) -> np.ndarray:
-    bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR) if image.ndim == 2 else image
-    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-    saturation, value = hsv[:, :, 1], hsv[:, :, 2]
-    value_floor = int(np.clip(np.percentile(value, 58), 125, 215))
-    mask = np.where((saturation < 78) & (value >= value_floor), 255, 0).astype(np.uint8)
-    scale = max(1, int(round(min(mask.shape) / 280)))
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (4 * scale + 1, 4 * scale + 1))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    mask = cv2.morphologyEx(
-        mask,
-        cv2.MORPH_OPEN,
-        cv2.getStructuringElement(cv2.MORPH_RECT, (2 * scale + 1, 2 * scale + 1)),
-    )
-    return mask
 
 
 def _long_lines(image: np.ndarray) -> list[list[int]]:
@@ -114,7 +99,7 @@ def estimate_visible_region(image: np.ndarray) -> dict[str, Any]:
         raise ValueError("image must be a non-empty NumPy array")
     height, width = image.shape[:2]
     image_area = float(width * height)
-    mask = _card_mask(image)
+    mask = build_card_surface_mask(image)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     lines = _long_lines(image)
 

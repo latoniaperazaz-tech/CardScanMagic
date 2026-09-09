@@ -13,7 +13,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-from src.inference.evidence_fusion import infer_partial_card
+from src.inference.evidence_fusion import infer_partial_card, infer_partial_card_in_scene
 
 
 def _read_image(path: Path) -> np.ndarray:
@@ -44,23 +44,60 @@ def _draw_debug(image: np.ndarray, result: dict[str, Any]) -> np.ndarray:
     overlay = image.copy()
     detections = result["detections"]
     visible = detections["visible_region"]
+    source = result.get("source_geometry", {"x": 0, "y": 0})
+    offset_x, offset_y = int(source.get("x", 0)), int(source.get("y", 0))
+
+    localization = result.get("localization")
+    if localization:
+        scene_candidates = result.get("scene_candidates", [])
+        selected_bbox = scene_candidates[0]["bbox"] if scene_candidates else None
+        for candidate in localization.get("candidates", []):
+            polygon = np.asarray(candidate.get("polygon", []), dtype=np.int32)
+            if len(polygon) < 3:
+                continue
+            x, y, width, height = candidate["bbox"]
+            is_selected = selected_bbox == candidate["bbox"]
+            color = (60, 220, 90) if is_selected else (60, 180, 255)
+            cv2.polylines(overlay, [polygon], True, color, 2, cv2.LINE_AA)
+            cv2.putText(
+                overlay,
+                f"card {candidate['score']:.2f}",
+                (max(2, int(x)), max(18, int(y) + 18)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
 
     polygon = visible.get("card_polygon")
     if polygon and len(polygon) >= 3:
+        shifted_polygon = np.asarray(polygon, dtype=np.int32) + np.array(
+            [offset_x, offset_y], dtype=np.int32
+        )
         cv2.polylines(
             overlay,
-            [np.asarray(polygon, dtype=np.int32)],
+            [shifted_polygon],
             True,
             (60, 220, 90),
             2,
             cv2.LINE_AA,
         )
     for x1, y1, x2, y2 in visible.get("lines", []):
-        cv2.line(overlay, (x1, y1), (x2, y2), (40, 180, 255), 1, cv2.LINE_AA)
+        cv2.line(
+            overlay,
+            (x1 + offset_x, y1 + offset_y),
+            (x2 + offset_x, y2 + offset_y),
+            (40, 180, 255),
+            1,
+            cv2.LINE_AA,
+        )
 
     radius = max(5, int(round(min(image.shape[:2]) * 0.015)))
     for index, pip in enumerate(detections["pips"], start=1):
         x, y = (int(round(value)) for value in pip["center_px"])
+        x += offset_x
+        y += offset_y
         cv2.circle(overlay, (x, y), radius, (255, 80, 220), 2, cv2.LINE_AA)
         cv2.circle(overlay, (x, y), 2, (255, 255, 255), -1, cv2.LINE_AA)
         cv2.putText(
@@ -87,6 +124,23 @@ def _draw_debug(image: np.ndarray, result: dict[str, Any]) -> np.ndarray:
         y += 27
 
     put("PARTIAL CARD INFERENCE", (80, 220, 255), 0.62)
+    if localization:
+        put(
+            f"Card ROI: {localization['reason']}",
+            (80, 220, 120) if localization["found"] else (80, 160, 255),
+            0.48,
+        )
+        scene_candidates = result.get("scene_candidates", [])
+        if scene_candidates:
+            put(
+                f"ROI source: {scene_candidates[0]['source']}  "
+                f"{_percent(result.get('scene_score', 0.0))}",
+                (80, 220, 120),
+                0.48,
+            )
+    color_group = result["evidence"].get("color_group")
+    if color_group:
+        put(f"Color group: {color_group}", (120, 190, 255), 0.52)
     put(f"Pips: {len(detections['pips'])}")
     put(
         f"Region: {visible['region']}  {_percent(visible['confidence'])}",
@@ -112,6 +166,21 @@ def _draw_debug(image: np.ndarray, result: dict[str, Any]) -> np.ndarray:
 
 
 def _print_report(result: dict[str, Any]) -> None:
+    localization = result.get("localization")
+    if localization:
+        print(
+            f"Card localization: {'found' if localization['found'] else 'unknown'} "
+            f"({_percent(localization['confidence'])})"
+        )
+        scene_candidates = result.get("scene_candidates", [])
+        if scene_candidates:
+            print(
+                f"Selected ROI: {scene_candidates[0]['source']} "
+                f"({_percent(result.get('scene_score', 0.0))})"
+            )
+    color_group = result["evidence"].get("color_group")
+    if color_group:
+        print(f"Color group: {color_group}")
     print(f"Detected pips: {len(result['detections']['pips'])}")
     visible = result["detections"]["visible_region"]
     print(f"Visible region: {visible['region']} ({_percent(visible['confidence'])})")
@@ -141,6 +210,11 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--show", action="store_true", help="open an OpenCV preview window")
     parser.add_argument("--json", action="store_true", help="also print the complete JSON result")
+    parser.add_argument(
+        "--localize",
+        action="store_true",
+        help="locate a card ROI in a wider scene before running inference",
+    )
     return parser.parse_args()
 
 
@@ -148,7 +222,7 @@ def main() -> int:
     args = _parse_args()
     try:
         image = _read_image(args.image)
-        result = infer_partial_card(image)
+        result = infer_partial_card_in_scene(image) if args.localize else infer_partial_card(image)
         debug_image = _draw_debug(image, result)
         safe_stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", args.image.stem).strip("._") or "image"
         output_path = args.output_dir / f"debug_{safe_stem}.jpg"

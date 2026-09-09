@@ -14,13 +14,23 @@ The app is currently tuned for one 炸金花 hand: it accepts at most three uniq
 cards per round. After the third confirmed card it stops the camera automatically
 and keeps the three-card result on screen. Tap Clear before the next hand.
 
-- Requests the best available rear camera. On a multi-camera iPhone such as
-  the 14 Pro it uses the virtual rear camera, allowing the system's normal
-  close-focus lens selection as a card approaches the phone. It prefers 60 fps
-  for that mode to give autofocus and exposure enough time; other devices use
-  120 fps when available, then 60 fps. 240 fps is
-  intentionally not the default: it shortens exposure in ordinary indoor
-  light without increasing the model's roughly 30 inferences per second.
+- Prefers the physical rear wide-angle camera (1x) so a fast card cannot trigger
+  a virtual-camera lens switch. It prefers a 1920x1080 format at 120 fps, then
+  60 fps, and falls back to the largest supported 120/60 fps format when no
+  1080p mode is available. Continuous auto exposure is capped at approximately
+  1/500 s (clamped to the active format's range) to reduce motion trails; this
+  requires strong, diffuse light and is verified on the real phone. Video
+  stabilization is disabled because the phone is stationary and the subject is
+  moving. The app does not use the Camera app's Action mode. Because 1x does not
+  provide the virtual camera's automatic macro lens switch, the card must stay
+  within the wide camera's actual focus range. 240 fps is intentionally not
+  selected by default: it reduces exposure time without increasing the model's
+  roughly 30 inferences per second.
+- The selected device, format, requested rate, exposure ceiling, delivered
+  buffer rate, actual exposure, ISO, lens position, and focus/exposure state are
+  printed as diagnostic logs. A real iPhone 14 Pro test is required to confirm
+  the actual 1920x1080/120 fps stream, exposure, focus distance, and dropped
+  frames; the requested mode alone is not proof of delivery.
 - Samples the high-frame-rate stream, retaining a sharp candidate frame instead
   of trying to run the neural model on every camera frame.
 - Detects the rank/suit corner anywhere in the frame, tracks it across time and
@@ -151,11 +161,15 @@ dependency set and run the diagnostic command:
 ```bash
 python -m pip install -r requirements-partial.txt
 python debug_partial.py --image test.jpg
+python debug_partial.py --image desk_scene.jpg --localize
 ```
 
 The command prints suit and A-10 candidate rankings, preserves `unknown` when
 evidence is weak, explains the winning pip-layout score, and saves an annotated
-`outputs/debug_test.jpg`. Add `--show` only on a machine with a desktop display.
+`outputs/debug_test.jpg`. Use `--localize` when the input includes desk, hand, or
+other background; the diagnostic then ranks probable card surfaces and runs pip
+inference only in the selected ROI. Add `--show` only on a machine with a desktop
+display.
 
 ## Project files
 

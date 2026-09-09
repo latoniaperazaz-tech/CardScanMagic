@@ -13,7 +13,7 @@ on:
           - mantou-yolo11s
           - external-coreml
       external_coreml_url:
-        description: "外部 .mlpackage/.zip 下载地址（选择 external-coreml 时必填）"
+        description: "外部 .mlpackage/.mlmodel/.zip 下载地址（选择 external-coreml 时必填）"
         required: false
         type: string
       external_coreml_sha256:
@@ -88,16 +88,27 @@ jobs:
                 echo "external_coreml_url is required for external-coreml" >&2
                 exit 2
               }
+              # Preserve a recognized suffix so a direct .mlmodel download is
+              # accepted by export_coreml.py. Archives are still detected by
+              # content, so URLs with query strings remain usable.
+              external_name="${EXTERNAL_COREML_URL##*/}"
+              external_name="${external_name%%\?*}"
+              case "$external_name" in
+                *.mlmodel) external_suffix=".mlmodel" ;;
+                *.mlpackage) external_suffix=".mlpackage" ;;
+                *) external_suffix=".zip" ;;
+              esac
+              external_model_path="/tmp/card-detector-external-model${external_suffix}"
               curl --fail --location --retry 3 --silent --show-error \
                 "$EXTERNAL_COREML_URL" \
-                --output /tmp/card-detector-external-model
+                --output "$external_model_path"
               if [[ -n "$EXTERNAL_COREML_SHA256" ]]; then
-                echo "$EXTERNAL_COREML_SHA256  /tmp/card-detector-external-model" | shasum -a 256 -c -
+                echo "$EXTERNAL_COREML_SHA256  $external_model_path" | shasum -a 256 -c -
               else
                 echo "Warning: external model SHA-256 was not supplied; review the downloaded artifact before distribution." >&2
               fi
               python scripts/export_coreml.py \
-                --coreml-source /tmp/card-detector-external-model \
+                --coreml-source "$external_model_path" \
                 --model-id "$EXTERNAL_MODEL_ID"
               ;;
             *)
