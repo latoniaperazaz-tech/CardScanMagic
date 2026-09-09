@@ -1,3 +1,4 @@
+import CoreMedia
 import Foundation
 
 struct CameraFormatOption: Equatable {
@@ -8,13 +9,12 @@ struct CameraFormatOption: Equatable {
 }
 
 enum CameraCapturePolicy {
-    static let preferredFrameRates = [120, 60]
+    static let preferredFrameRates = [60, 30]
     static let preferredWidth: Int32 = 1920
     static let preferredHeight: Int32 = 1080
-    static let maximumAutoExposureSeconds = 1.0 / 500.0
 
     static func preferredFormat(from options: [CameraFormatOption]) -> CameraFormatOption? {
-        options.sorted { lhs, rhs in
+        options.filter { preferredFrameRates.contains($0.frameRate) }.sorted { lhs, rhs in
             let lhsIsPreferredSize = hasPreferredDimensions(lhs)
             let rhsIsPreferredSize = hasPreferredDimensions(rhs)
             if lhsIsPreferredSize != rhsIsPreferredSize {
@@ -29,14 +29,23 @@ enum CameraCapturePolicy {
         }.first
     }
 
-    static func clampedMaximumExposureSeconds(
-        minimum: Double,
-        maximum: Double
-    ) -> Double? {
-        guard minimum.isFinite, maximum.isFinite, minimum > 0, maximum >= minimum else {
+    static func clampedFrameDuration(
+        frameRate: Int,
+        minimum: CMTime,
+        maximum: CMTime
+    ) -> CMTime? {
+        guard frameRate > 0, frameRate <= Int(Int32.max),
+              minimum.isNumeric, maximum.isNumeric,
+              CMTimeCompare(minimum, .zero) > 0,
+              CMTimeCompare(maximum, minimum) >= 0 else {
             return nil
         }
-        return min(max(maximumAutoExposureSeconds, minimum), maximum)
+        // Nanosecond rounding can put 1/120 below a hardware range boundary.
+        // Preserve rational timing, including the device's exact endpoints.
+        let requested = CMTime(value: 1, timescale: CMTimeScale(frameRate))
+        if CMTimeCompare(requested, minimum) < 0 { return minimum }
+        if CMTimeCompare(requested, maximum) > 0 { return maximum }
+        return requested
     }
 
     private static func hasPreferredDimensions(_ option: CameraFormatOption) -> Bool {

@@ -8,6 +8,7 @@ enum CameraError: LocalizedError {
     case noRearCamera
     case cannotAddInput
     case cannotAddOutput
+    case unsupportedFrameDuration
 
     var errorDescription: String? {
         switch self {
@@ -15,6 +16,7 @@ enum CameraError: LocalizedError {
         case .noRearCamera: return "找不到后置摄像头。"
         case .cannotAddInput: return "无法连接后置摄像头。"
         case .cannotAddOutput: return "无法读取摄像头画面。"
+        case .unsupportedFrameDuration: return "摄像头帧率配置失败，请重新开始扫描。"
         }
     }
 }
@@ -178,10 +180,8 @@ final class CameraService: NSObject {
 
     @discardableResult
     private func configureBestFrameRate(for camera: AVCaptureDevice) throws -> Int {
-        // At 120 fps the sampler gets more chances to retain a sharp frame and
-        // auto exposure cannot consume more than one 1/120-second frame. The
-        // additional exposure ceiling below is what actually suppresses long
-        // subject-motion trails under sufficient light.
+        // Start with standard capture rates while retaining device-managed
+        // exposure and focus tuning during startup.
         let desiredRates = CameraCapturePolicy.preferredFrameRates
         let formats = camera.formats.enumerated().compactMap { index, format -> (format: AVCaptureDevice.Format, option: CameraFormatOption)? in
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
@@ -210,33 +210,33 @@ final class CameraService: NSObject {
 
         let targetRate: Double
         if let selected {
+            guard let range = selected.format.videoSupportedFrameRateRanges.first(where: {
+                $0.minFrameRate <= Double(selected.option.frameRate)
+                    && $0.maxFrameRate >= Double(selected.option.frameRate)
+            }), let duration = CameraCapturePolicy.clampedFrameDuration(
+                frameRate: selected.option.frameRate,
+                minimum: range.minFrameDuration,
+                maximum: range.maxFrameDuration
+            ) else {
+                throw CameraError.unsupportedFrameDuration
+            }
             camera.activeFormat = selected.format
-            targetRate = Double(selected.option.frameRate)
+            setFrameDuration(for: camera, duration: duration)
+            targetRate = 1.0 / duration.seconds
         } else {
-            // Keep the app usable on hardware without a 60/120 fps format, but
-            // set and report the active format's real maximum instead of
-            // claiming a requested rate that was never applied.
-            targetRate = maximumSupportedFrameRate(in: camera.activeFormat) ?? 30
+            // An unusual camera keeps its default timing. Never synthesize an
+            // unsupported fallback duration from a floating-point frame rate.
+            targetRate = 30
         }
 
-        setFrameDuration(for: camera, frameRate: targetRate)
         if camera.isFocusModeSupported(.continuousAutoFocus) {
             camera.focusMode = .continuousAutoFocus
         }
         if camera.isExposureModeSupported(.continuousAutoExposure) {
             camera.exposureMode = .continuousAutoExposure
-            configureMaximumExposureDuration(for: camera)
         }
         if camera.isSmoothAutoFocusSupported {
             camera.isSmoothAutoFocusEnabled = false
-        }
-        if camera.isAutoFocusRangeRestrictionSupported {
-            camera.autoFocusRangeRestriction = .near
-        }
-        if camera.isLowLightBoostSupported {
-            // Low-light boost can lengthen exposure and reintroduce subject
-            // trails. The exposure cap is more useful for this scan mode.
-            camera.automaticallyEnablesLowLightBoostWhenAvailable = false
         }
 
         let requestedZoom = 1.0
@@ -249,22 +249,14 @@ final class CameraService: NSObject {
         return effectiveFrameRate(for: camera, fallback: targetRate)
     }
 
-    private func maximumSupportedFrameRate(in format: AVCaptureDevice.Format) -> Double? {
-        let maximum = format.videoSupportedFrameRateRanges
-            .map(\.maxFrameRate)
-            .max()
-        guard let maximum, maximum.isFinite, maximum > 0 else { return nil }
-        return maximum
-    }
-
-    private func setFrameDuration(for camera: AVCaptureDevice, frameRate: Double) {
-        guard frameRate.isFinite, frameRate > 0 else { return }
-        let duration = CMTime(
-            seconds: 1.0 / frameRate,
-            preferredTimescale: 1_000_000_000
-        )
-        camera.activeVideoMinFrameDuration = duration
-        camera.activeVideoMaxFrameDuration = duration
+    private func setFrameDuration(for camera: AVCaptureDevice, duration: CMTime) {
+        if CMTimeCompare(duration, camera.activeVideoMaxFrameDuration) > 0 {
+            camera.activeVideoMaxFrameDuration = duration
+            camera.activeVideoMinFrameDuration = duration
+        } else {
+            camera.activeVideoMinFrameDuration = duration
+            camera.activeVideoMaxFrameDuration = duration
+        }
     }
 
     private func effectiveFrameRate(
@@ -280,21 +272,6 @@ final class CameraService: NSObject {
         format.videoSupportedFrameRateRanges.contains {
             $0.minFrameRate <= frameRate && $0.maxFrameRate >= frameRate
         }
-    }
-
-    private func configureMaximumExposureDuration(for camera: AVCaptureDevice) {
-        let minimum = camera.activeFormat.minExposureDuration.seconds
-        let maximum = camera.activeFormat.maxExposureDuration.seconds
-        guard let seconds = CameraCapturePolicy.clampedMaximumExposureSeconds(
-            minimum: minimum,
-            maximum: maximum
-        ) else {
-            return
-        }
-        camera.activeMaxExposureDuration = CMTime(
-            seconds: seconds,
-            preferredTimescale: 1_000_000_000
-        )
     }
 
     private func logConfiguration(
