@@ -23,6 +23,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.cardscanmagic
         PRODUCT_NAME: CardScanMagic
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_CFBundleDisplayName: "计算机"
         INFOPLIST_KEY_NSCameraUsageDescription: "Use the rear camera to recognize playing cards dealt above the phone."

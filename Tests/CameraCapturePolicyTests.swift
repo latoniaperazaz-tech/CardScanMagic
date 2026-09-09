@@ -30,20 +30,27 @@ final class CameraCapturePolicyTests: XCTestCase {
         XCTAssertEqual(selected?.index, 1)
     }
 
-    func testClampsExposureCeilingToFormatRange() {
-        XCTAssertEqual(
+    func testClampsExposureCeilingToFormatRange() throws {
+        let clampedToMaximum = try XCTUnwrap(
             CameraCapturePolicy.clampedMaximumExposureSeconds(
                 minimum: 1.0 / 1_000.0,
                 maximum: 1.0 / 30.0
-            )!,
+            )
+        )
+        XCTAssertEqual(
+            clampedToMaximum,
             1.0 / 500.0,
             accuracy: 0.000_000_1
         )
-        XCTAssertEqual(
+
+        let clampedToMinimum = try XCTUnwrap(
             CameraCapturePolicy.clampedMaximumExposureSeconds(
                 minimum: 1.0 / 240.0,
                 maximum: 1.0 / 30.0
-            )!,
+            )
+        )
+        XCTAssertEqual(
+            clampedToMinimum,
             1.0 / 240.0,
             accuracy: 0.000_000_1
         )
