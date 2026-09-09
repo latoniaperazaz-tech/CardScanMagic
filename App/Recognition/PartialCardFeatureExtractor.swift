@@ -541,7 +541,10 @@ final class PartialCardFeatureExtractor {
                     let y = Double(iy)
                     let ink: Bool
                     switch suit {
-                    case "diamond": ink = abs(x - 64) / 44 + abs(y - 64) / 52 <= 1
+                    case "diamond":
+                        let horizontal: Double = abs(x - 64.0) / 44.0
+                        let vertical: Double = abs(y - 64.0) / 52.0
+                        ink = horizontal + vertical <= 1.0
                     case "heart":
                         ink = circle(x, y, 39, 43, 25) || circle(x, y, 89, 43, 25)
                             || triangle(x, y, baseY: 45, tipY: 118, halfWidth: 46)

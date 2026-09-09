@@ -97,10 +97,17 @@ enum PartialRankEstimator {
         let temperature = observed.count >= 4 ? 0.065 : 0.085
         let weights = scores.map { exp(($0.value - maximum) / temperature) }
         let totalWeight = weights.reduce(0, +)
-        let candidates = templates.indices.map {
-            PartialRankCandidate(rank: templates[$0].rank, probability: weights[$0] / totalWeight,
-                                 score: scores[$0].value, matchedCount: scores[$0].matchedCount)
-        }.sorted { $0.probability == $1.probability ? $0.rank < $1.rank : $0.probability > $1.probability }
+        var candidates: [PartialRankCandidate] = []
+        for index in templates.indices {
+            let candidate = PartialRankCandidate(rank: templates[index].rank,
+                probability: weights[index] / totalWeight,
+                score: scores[index].value, matchedCount: scores[index].matchedCount)
+            candidates.append(candidate)
+        }
+        candidates.sort { lhs, rhs in
+            if lhs.probability == rhs.probability { return lhs.rank < rhs.rank }
+            return lhs.probability > rhs.probability
+        }
         let best = candidates[0]
         let margin = best.probability - candidates[1].probability
         let centeredFullAce = observed.count == 1 && region == "full" && best.rank == "A"
