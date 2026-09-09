@@ -7,48 +7,61 @@ enum PartialEvidenceFusion {
         let layout: PartialRankResult
     }
 
-    static func fuse(model: [CardDetection], local: [Evidence], imageSize: CGSize) -> [CardDetection] {
-        var remaining = model.filter { $0.confidence.isFinite }
-        var fused: [CardDetection] = []
-        for evidence in local {
-            let features = evidence.features
-            guard features.localizationConfidence >= 0.50 else { continue }
-            let nearby = remaining.filter { overlaps($0.boundingBox, features.boundingBox) }
-            let layoutRank = evidence.layout.confidence >= 0.70 ? evidence.layout.rank : nil
-            let textRank = features.rankTextConfidence >= 0.80 ? features.rankText : nil
-            let suits = features.suitProbabilities.filter { $0.value.isFinite }
-                .sorted { $0.value > $1.value }
-            let bestSuit = suits.first
-            let suitResolved = features.suitConfidence >= 0.60
-                && (bestSuit?.value ?? 0) >= 0.65
-                && (bestSuit?.value ?? 0) - (suits.dropFirst().first?.value ?? 0) >= 0.15
+    private struct ResolvedEvidence {
+        let source: Evidence
+        let layoutRank: String?
+        let textRank: String?
+        let suit: CardFace.Suit?
 
-            // Conflicting readable cues veto this region, including a model
-            // label. A color or unresolved layout never vetoes a model alone.
-            let rankConflict = textRank != nil && layoutRank != nil && textRank != layoutRank
-            if rankConflict {
-                remaining.removeAll { overlaps($0.boundingBox, features.boundingBox) }
-                continue
+        var rank: String? { textRank ?? layoutRank }
+        var box: CGRect { source.features.boundingBox }
+        var hasRankConflict: Bool {
+            textRank != nil && layoutRank != nil && textRank != layoutRank
+        }
+    }
+
+    static func fuse(model: [CardDetection], local: [Evidence], imageSize: CGSize) -> [CardDetection] {
+        let usableModel = model.filter {
+            validConfidence(Double($0.confidence)) && validBox($0.boundingBox)
+        }
+        let usableLocal: [ResolvedEvidence] = imageSize.width.isFinite && imageSize.height.isFinite
+            && imageSize.width > 0 && imageSize.height > 0 ? local.compactMap(resolve) : []
+
+        // Resolve all overlapping cues before consuming any model observation.
+        // A later crop must be able to veto an earlier crop's provisional face.
+        let vetoedRegions = usableLocal.indices.compactMap { index -> CGRect? in
+            let evidence = usableLocal[index]
+            let modelConflict = usableModel.contains { detection in
+                detection.confidence >= 0.80 && overlaps(detection.boundingBox, evidence.box)
+                    && ((evidence.rank != nil && detection.card.rank != evidence.rank)
+                        || (evidence.suit != nil && detection.card.suit != evidence.suit))
             }
-            let rank = textRank ?? layoutRank
-            let suit = suitResolved ? bestSuit.flatMap { parseSuit($0.key) } : nil
-            let conflicting = nearby.contains { detection in
-                detection.confidence >= 0.80
-                    && ((rank != nil && detection.card.rank != rank)
-                        || (suit != nil && detection.card.suit != suit))
+            let localConflict = usableLocal.indices.contains { otherIndex in
+                guard index != otherIndex else { return false }
+                let other = usableLocal[otherIndex]
+                guard overlaps(evidence.box, other.box) else { return false }
+                return (evidence.rank != nil && other.rank != nil && evidence.rank != other.rank)
+                    || (evidence.suit != nil && other.suit != nil && evidence.suit != other.suit)
             }
-            if conflicting {
-                remaining.removeAll { overlaps($0.boundingBox, features.boundingBox) }
-                continue
-            }
-            guard let rank, let suit,
+            return evidence.hasRankConflict || modelConflict || localConflict ? evidence.box : nil
+        }
+        var remaining = usableModel.filter { detection in
+            !vetoedRegions.contains { overlaps($0, detection.boundingBox) }
+        }
+        var fused: [CardDetection] = []
+        for evidence in usableLocal {
+            guard !vetoedRegions.contains(where: { overlaps($0, evidence.box) }),
+                  let rank = evidence.rank, let suit = evidence.suit,
                   let card = CardFace.parse(rank + String(suit.rawValue)) else { continue }
-            let rankConfidence = textRank != nil ? features.rankTextConfidence : evidence.layout.confidence
+            let features = evidence.source.features
+            let nearby = usableModel.filter { overlaps($0.boundingBox, evidence.box) }
+            let rankConfidence = evidence.textRank != nil
+                ? features.rankTextConfidence : evidence.source.layout.confidence
             let localConfidence = min(rankConfidence, features.suitConfidence)
             let agreeing = nearby.filter { $0.card == card }.max { $0.confidence < $1.confidence }
-            let dualRankSupport = textRank != nil && layoutRank == textRank
-            let strongLayout = layoutRank != nil && evidence.layout.confidence >= 0.90
-                && features.pipCenters.count >= 4
+            let dualRankSupport = evidence.textRank != nil && evidence.layoutRank == evidence.textRank
+            let strongLayout = evidence.layoutRank != nil && evidence.source.layout.confidence >= 0.90
+                && distinctPipCount(features.pipCenters) >= 4
             let independent = (agreeing?.confidence ?? 0) >= 0.65
                 || dualRankSupport || strongLayout
             let confidence: Float
@@ -65,13 +78,71 @@ enum PartialEvidenceFusion {
                 boundingBox: features.boundingBox, orientedImageSize: imageSize,
                 hasIndependentSupport: independent))
         }
-        // Multiple overlapping local crops remain one observation.
+        // Repeated crops of the same face remain one observation. Different
+        // faces must survive to the coordinator's unresolved-conflict gate.
         var result: [CardDetection] = []
-        for detection in (fused + remaining).sorted(by: { $0.confidence > $1.confidence }) {
-            if result.contains(where: { overlaps($0.boundingBox, detection.boundingBox) }) { continue }
+        for detection in (fused + remaining).sorted(by: {
+            $0.confidence == $1.confidence ? $0.card.code < $1.card.code : $0.confidence > $1.confidence
+        }) {
+            if result.contains(where: {
+                $0.card == detection.card && overlaps($0.boundingBox, detection.boundingBox)
+            }) { continue }
             result.append(detection)
         }
         return result
+    }
+
+    private static func resolve(_ evidence: Evidence) -> ResolvedEvidence? {
+        let features = evidence.features
+        guard validBox(features.boundingBox),
+              validConfidence(features.localizationConfidence), features.localizationConfidence >= 0.50,
+              validConfidence(features.rankTextConfidence), validConfidence(evidence.layout.confidence),
+              validConfidence(features.suitConfidence),
+              features.suitProbabilities.count == 4,
+              features.suitProbabilities.allSatisfy({ parseSuit($0.key) != nil && validConfidence($0.value) }),
+              abs(features.suitProbabilities.values.reduce(0, +) - 1) <= 0.01 else {
+            return nil
+        }
+        let suits = features.suitProbabilities.sorted { $0.value > $1.value }
+        let bestSuit = suits.first
+        let suitResolved = features.suitConfidence >= 0.60
+            && (bestSuit?.value ?? 0) >= 0.65
+            && (bestSuit?.value ?? 0) - (suits.dropFirst().first?.value ?? 0) >= 0.15
+        return ResolvedEvidence(
+            source: evidence,
+            layoutRank: evidence.layout.confidence >= 0.70 ? parsedRank(evidence.layout.rank) : nil,
+            textRank: features.rankTextConfidence >= 0.80 ? parsedRank(features.rankText) : nil,
+            suit: suitResolved ? bestSuit.flatMap { parseSuit($0.key) } : nil
+        )
+    }
+
+    private static func parsedRank(_ value: String?) -> String? {
+        guard let value else { return nil }
+        return CardFace.parse(value + "d")?.rank
+    }
+
+    private static func validConfidence(_ value: Double) -> Bool {
+        value.isFinite && (0...1).contains(value)
+    }
+
+    private static func validBox(_ value: CGRect) -> Bool {
+        let box = value.standardized
+        return box.minX.isFinite && box.minY.isFinite && box.maxX.isFinite && box.maxY.isFinite
+            && box.width > 0 && box.height > 0 && (box.width * box.height).isFinite
+    }
+
+    private static func distinctPipCount(_ points: [CGPoint]) -> Int {
+        var distinct: [CGPoint] = []
+        for point in points.prefix(64) {
+            guard point.x.isFinite, point.y.isFinite,
+                  (0...1).contains(point.x), (0...1).contains(point.y),
+                  !distinct.contains(where: { hypot($0.x - point.x, $0.y - point.y) < 0.012 }) else {
+                continue
+            }
+            distinct.append(point)
+            if distinct.count >= 4 { return distinct.count }
+        }
+        return distinct.count
     }
 
     private static func parseSuit(_ value: String) -> CardFace.Suit? {

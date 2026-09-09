@@ -20,6 +20,9 @@ final class ScanPipeline {
     private let processingQueue = DispatchQueue(label: "com.cardscanmagic.recognition", qos: .userInitiated)
     private var engine: RecognitionEngine?
     private var coordinator = CardEventCoordinator()
+    private var diagnosticsStart: TimeInterval = 0
+    private var analyzedFrames = 0
+    private var analysisSeconds: TimeInterval = 0
 
     /// Loads the Core ML model away from the main actor. Calls are serialized
     /// with inference and are idempotent, so multiple start requests cannot
@@ -111,10 +114,12 @@ final class ScanPipeline {
             }
 
             do {
+                let analysisStart = ProcessInfo.processInfo.systemUptime
                 let detections = try autoreleasepool {
                     try engine.recognize(pixelBuffer: frame.value.pixelBuffer, orientation: frame.value.orientation)
                 }
                 guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
+                self.recordDiagnostics(elapsed: ProcessInfo.processInfo.systemUptime - analysisStart)
 
                 // Use the camera sample's monotonic timestamp rather than the
                 // wall-clock time at which Vision happens to finish.  Model
@@ -146,6 +151,9 @@ final class ScanPipeline {
             }
 
             self.coordinator.reset()
+            self.diagnosticsStart = ProcessInfo.processInfo.systemUptime
+            self.analyzedFrames = 0
+            self.analysisSeconds = 0
             guard self.sessionGate.markCoordinatorReady(for: sessionID) else { return }
             self.scheduleDrain(for: sessionID)
 
@@ -153,5 +161,20 @@ final class ScanPipeline {
                 self.onDetections?(sessionID, [])
             }
         }
+    }
+
+    private func recordDiagnostics(elapsed: TimeInterval) {
+        analyzedFrames += 1
+        analysisSeconds += elapsed
+        let now = ProcessInfo.processInfo.systemUptime
+        let window = now - diagnosticsStart
+        guard window >= 2 else { return }
+        let stats = backlog.statistics
+        print("[ScanPipeline] analyzedFPS=\(Double(analyzedFrames) / window) "
+            + "meanAnalysisMs=\(1000 * analysisSeconds / Double(analyzedFrames)) "
+            + "pending=\(stats.pending) retainedBytes=\(stats.bytes) dropped=\(stats.dropped)")
+        diagnosticsStart = now
+        analyzedFrames = 0
+        analysisSeconds = 0
     }
 }
