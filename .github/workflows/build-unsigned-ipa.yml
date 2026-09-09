@@ -126,6 +126,18 @@ jobs:
           fi
           xcodegen generate
 
+      - name: Run Swift unit tests on iOS Simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project CardScanMagic.xcodeproj \
+            -scheme CardScanMagic \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
       - name: Build an unsigned device app
         shell: bash
         run: |
