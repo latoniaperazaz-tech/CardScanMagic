@@ -145,7 +145,7 @@ jobs:
           xcodebuild \
             -project CardScanMagic.xcodeproj \
             -scheme CardScanMagic \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphoneos \
             -derivedDataPath "$PWD/build/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
@@ -153,7 +153,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build
 
-          app_path="$PWD/build/DerivedData/Build/Products/Debug-iphoneos/CardScanMagic.app"
+          app_path="$PWD/build/DerivedData/Build/Products/Release-iphoneos/CardScanMagic.app"
           test -d "$app_path"
           mkdir -p build/Payload
           cp -R "$app_path" build/Payload/

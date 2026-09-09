@@ -49,6 +49,7 @@ final class RecognitionEngine {
     private let fullFrameRequest: VNCoreMLRequest
     private let portraitNearRequests: [RegionRequest]
     private let landscapeNearRequests: [RegionRequest]
+    private let partialExtractor = PartialCardFeatureExtractor()
 
     init() throws {
         guard let modelURL = Bundle.main.url(forResource: "CardDetector", withExtension: "mlmodelc") else {
@@ -108,23 +109,26 @@ final class RecognitionEngine {
             region: nil,
             orientedImageSize: orientedImageSize
         )
-        guard Self.shouldUseNearFallback(for: fullFrameDetections) else {
-            return fullFrameDetections
+        let features = try partialExtractor.extract(pixelBuffer: pixelBuffer, orientation: orientation)
+        let evidence = features.map {
+            PartialEvidenceFusion.Evidence(features: $0, layout: PartialRankEstimator.infer(
+                points: $0.pipCenters, imageAspectRatio: $0.imageAspectRatio,
+                visibleRegion: $0.visibleRegion))
         }
-
-        let nearRequests = orientedImageSize.height >= orientedImageSize.width
-            ? portraitNearRequests
-            : landscapeNearRequests
-        guard !nearRequests.isEmpty else { return [] }
-
-        try handler.perform(nearRequests.map(\.request))
-        return try nearRequests.flatMap { regionRequest in
-            try detections(
-                from: regionRequest.request,
-                region: regionRequest.region,
-                orientedImageSize: orientedImageSize
-            )
+        var modelDetections = fullFrameDetections
+        let firstPass = PartialEvidenceFusion.fuse(model: modelDetections, local: evidence,
+                                                   imageSize: orientedImageSize)
+        if Self.shouldUseNearFallback(for: firstPass) {
+            let nearRequests = orientedImageSize.height >= orientedImageSize.width
+                ? portraitNearRequests : landscapeNearRequests
+            try handler.perform(nearRequests.map(\.request))
+            modelDetections += try nearRequests.flatMap { regionRequest in
+                try detections(from: regionRequest.request, region: regionRequest.region,
+                               orientedImageSize: orientedImageSize)
+            }
         }
+        return PartialEvidenceFusion.fuse(model: modelDetections, local: evidence,
+                                           imageSize: orientedImageSize)
     }
 
     private static func makeRequest(

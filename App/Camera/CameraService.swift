@@ -180,8 +180,8 @@ final class CameraService: NSObject {
 
     @discardableResult
     private func configureBestFrameRate(for camera: AVCaptureDevice) throws -> Int {
-        // Start with standard capture rates while retaining device-managed
-        // exposure and focus tuning during startup.
+        // Prefer short sampling intervals for fast passes. Each timing value
+        // remains clamped to the selected device format's rational bounds.
         let desiredRates = CameraCapturePolicy.preferredFrameRates
         let formats = camera.formats.enumerated().compactMap { index, format -> (format: AVCaptureDevice.Format, option: CameraFormatOption)? in
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
@@ -234,6 +234,15 @@ final class CameraService: NSObject {
         }
         if camera.isExposureModeSupported(.continuousAutoExposure) {
             camera.exposureMode = .continuousAutoExposure
+            if let maximumExposure = CameraCapturePolicy.clampedMaximumExposureDuration(
+                minimum: camera.activeFormat.minExposureDuration,
+                maximum: camera.activeFormat.maxExposureDuration,
+                frameDuration: camera.activeVideoMinFrameDuration
+            ) {
+                // Auto exposure can raise ISO, but a short ceiling may leave
+                // dark scenes underexposed. Do not change low-light or focus ranges.
+                camera.activeMaxExposureDuration = maximumExposure
+            }
         }
         if camera.isSmoothAutoFocusSupported {
             camera.isSmoothAutoFocusEnabled = false

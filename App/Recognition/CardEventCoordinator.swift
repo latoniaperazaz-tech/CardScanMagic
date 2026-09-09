@@ -10,13 +10,14 @@ struct CardEventUpdate {
 }
 
 /// Converts noisy detector output into one record per card pass. A label must
-/// survive two geometrically plausible observations before it can be displayed
-/// or recorded. This intentionally favors a missed blurred frame over a wrong
-/// card in the magic routine's permanent history.
+/// survive two geometrically plausible captures, unless a strong single capture
+/// also has independent rank/suit or layout support. Reprocessing a capture does
+/// not add temporal evidence.
 final class CardEventCoordinator {
     private struct Vote {
         let label: CardFace
         let confidence: Float
+        let hasIndependentSupport: Bool
     }
 
     private struct Track {
@@ -34,7 +35,11 @@ final class CardEventCoordinator {
             box = detection.boundingBox
             orientedImageSize = detection.orientedImageSize
             velocity = .zero
-            votes = [Vote(label: detection.card, confidence: detection.confidence)]
+            votes = [Vote(
+                label: detection.card,
+                confidence: detection.confidence,
+                hasIndependentSupport: detection.hasIndependentSupport
+            )]
             lastSeen = date
             hitCount = 1
             wasRecorded = false
@@ -59,10 +64,11 @@ final class CardEventCoordinator {
     // the outline of the whole physical card. Those corner boxes are often
     // only 0.002 of the image area and can be very narrow (especially for a
     // suit symbol), so full-card geometry thresholds discard every result.
-    // Keep a modest per-frame confidence gate here; the two-frame vote below
-    // remains the main protection against blur and table-texture false hits.
+    // Keep a modest per-frame gate; temporal or independent visual support
+    // remains necessary before accepting blur and table-texture candidates.
     private let minimumDetectionConfidence: Float = 0.45
     private let minimumConfirmedConfidence: Float = 0.58
+    private let minimumSupportedSingleFrameConfidence: Float = 0.85
     private let minimumBoxArea: CGFloat = 0.0007
     // A close card can legitimately enter with its printed corner partly at
     // the edge of the frame. The two-frame, same-label confirmation below is
@@ -75,7 +81,8 @@ final class CardEventCoordinator {
     private let confirmationWindow = 5
     private let requiredMatchingVotes = 2
     private let trackTimeout: TimeInterval = 0.38
-    private let initialLinkWindow: TimeInterval = 0.09
+    private let initialLinkWindow: TimeInterval = 0.25
+    private let wideInitialLinkWindow: TimeInterval = 0.09
     private let minimumOverlap: CGFloat = 0.02
     // A near card grows substantially between two 30 fps inference samples.
     // The first bridge is intentionally looser because it still requires the
@@ -110,9 +117,9 @@ final class CardEventCoordinator {
             return CardEventUpdate(records: [], stableDetections: [])
         }
 
-        // Camera timestamps are monotonic. Ignore a late Vision result instead
-        // of allowing it to move a track backwards and create a duplicate.
-        if let lastTimestamp, date < lastTimestamp {
+        // Camera timestamps identify distinct captures, not inference attempts.
+        // Ignore repeated and late results so neither can add a temporal vote.
+        if let lastTimestamp, date <= lastTimestamp {
             return CardEventUpdate(records: [], stableDetections: [])
         }
         lastTimestamp = date
@@ -142,7 +149,8 @@ final class CardEventCoordinator {
         }
 
         var records: [CardRecord] = []
-        for index in tracks.indices where !tracks[index].wasRecorded {
+        for index in tracks.indices where !tracks[index].wasRecorded
+            && matchedTrackIDs.contains(tracks[index].id) {
             guard let stableCard = stableCard(in: tracks[index].votes),
                   !recordedCards.contains(stableCard.card),
                   !hasUnresolvedLabelConflict(for: tracks[index], at: date),
@@ -169,12 +177,18 @@ final class CardEventCoordinator {
         }
 
         let stableDetections = tracks.compactMap { track -> CardDetection? in
-            guard let stableCard = stableCard(in: track.votes) else { return nil }
+            guard let stableCard = stableCard(in: track.votes),
+                  track.wasRecorded || matchedTrackIDs.contains(track.id),
+                  !hasUnresolvedLabelConflict(for: track, at: date),
+                  track.wasRecorded || !hasRecentPassConflict(for: track, at: date) else {
+                return nil
+            }
             return CardDetection(
                 card: stableCard.card,
                 confidence: stableCard.confidence,
                 boundingBox: track.box,
-                orientedImageSize: track.orientedImageSize
+                orientedImageSize: track.orientedImageSize,
+                hasIndependentSupport: stableCard.hasIndependentSupport
             )
         }
         .sorted { $0.confidence > $1.confidence }
@@ -238,7 +252,8 @@ final class CardEventCoordinator {
             card: detection.card,
             confidence: detection.confidence,
             boundingBox: clipped,
-            orientedImageSize: detection.orientedImageSize
+            orientedImageSize: detection.orientedImageSize,
+            hasIndependentSupport: detection.hasIndependentSupport
         )
     }
 
@@ -265,7 +280,11 @@ final class CardEventCoordinator {
         track.orientedImageSize = detection.orientedImageSize
         track.lastSeen = date
         track.hitCount += 1
-        track.votes.append(Vote(label: detection.card, confidence: detection.confidence))
+        track.votes.append(Vote(
+            label: detection.card,
+            confidence: detection.confidence,
+            hasIndependentSupport: detection.hasIndependentSupport
+        ))
         track.votes = Array(track.votes.suffix(confirmationWindow))
     }
 
@@ -308,11 +327,17 @@ final class CardEventCoordinator {
 
             let distanceGate: CGFloat
             if track.hitCount == 1 {
-                // The first two model samples may be far apart during a very
-                // fast pass. Only allow this wider bridge immediately after
-                // the first sample, with the same label and a similar box.
+                // Keep the existing fast-motion bridge for adjacent captures.
+                // Slower sampled captures may link up to 250 ms later, but
+                // only with tight spatial and size continuity.
                 guard age <= initialLinkWindow else { continue }
-                distanceGate = min(0.45, max(0.20, track.box.diagonal * 1.80 + 0.08))
+                if age <= wideInitialLinkWindow {
+                    distanceGate = min(0.45, max(0.20, track.box.diagonal * 1.80 + 0.08))
+                } else {
+                    guard sizeDifference <= 0.35 else { continue }
+                    distanceGate = min(0.10, max(0.025, track.box.diagonal * 0.35))
+                    guard overlap >= 0.34 || centerDistance <= distanceGate else { continue }
+                }
             } else {
                 let predictedDistance = track.box.diagonal * 0.95
                     + track.velocity.magnitude * predictionAge * 1.20 + 0.045
@@ -330,7 +355,16 @@ final class CardEventCoordinator {
         return best?.index
     }
 
-    private func stableCard(in votes: [Vote]) -> (card: CardFace, confidence: Float)? {
+    private func stableCard(
+        in votes: [Vote]
+    ) -> (card: CardFace, confidence: Float, hasIndependentSupport: Bool)? {
+        if votes.count == 1, let vote = votes.first {
+            guard vote.hasIndependentSupport,
+                  vote.confidence >= minimumSupportedSingleFrameConfidence else {
+                return nil
+            }
+            return (vote.label, vote.confidence, true)
+        }
         guard votes.count >= requiredMatchingVotes else { return nil }
 
         let grouped = Dictionary(grouping: votes, by: \.label)
@@ -363,7 +397,7 @@ final class CardEventCoordinator {
 
         let confidence = winner.votes.map(\.confidence).reduce(0, +) / Float(winner.votes.count)
         guard confidence >= minimumConfirmedConfidence else { return nil }
-        return (winner.card, confidence)
+        return (winner.card, confidence, winner.votes.contains { $0.hasIndependentSupport })
     }
 
     /// When two labels both become stable in the same tiny region at the same

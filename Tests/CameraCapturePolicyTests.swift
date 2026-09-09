@@ -3,21 +3,31 @@ import XCTest
 @testable import CardScanMagic
 
 final class CameraCapturePolicyTests: XCTestCase {
-    func testPrefers60Then30FPS() {
-        XCTAssertEqual(CameraCapturePolicy.preferredFrameRates, [60, 30])
+    func testPrefers120Then60Then30FPS() {
+        XCTAssertEqual(CameraCapturePolicy.preferredFrameRates, [120, 60, 30])
 
         let selected = CameraCapturePolicy.preferredFormat(from: [
             CameraFormatOption(index: 0, width: 1920, height: 1080, frameRate: 30),
+            CameraFormatOption(index: 1, width: 1920, height: 1080, frameRate: 60),
+            CameraFormatOption(index: 2, width: 1920, height: 1080, frameRate: 120)
+        ])
+
+        XCTAssertEqual(selected?.index, 2)
+    }
+
+    func testPrefers1080pBeforeLargerFormatAtSameRate() {
+        let selected = CameraCapturePolicy.preferredFormat(from: [
+            CameraFormatOption(index: 0, width: 3840, height: 2160, frameRate: 60),
             CameraFormatOption(index: 1, width: 1920, height: 1080, frameRate: 60)
         ])
 
         XCTAssertEqual(selected?.index, 1)
     }
 
-    func testPrefers1080pBeforeLargerFallbackFormat() {
+    func testPrefers120FPSBefore1080pAt60FPS() {
         let selected = CameraCapturePolicy.preferredFormat(from: [
-            CameraFormatOption(index: 0, width: 3840, height: 2160, frameRate: 60),
-            CameraFormatOption(index: 1, width: 1920, height: 1080, frameRate: 30)
+            CameraFormatOption(index: 0, width: 1920, height: 1080, frameRate: 60),
+            CameraFormatOption(index: 1, width: 1280, height: 720, frameRate: 120)
         ])
 
         XCTAssertEqual(selected?.index, 1)
@@ -33,9 +43,18 @@ final class CameraCapturePolicyTests: XCTestCase {
         XCTAssertEqual(selected?.index, 1)
     }
 
-    func testFallsBackTo30FPSAndExcludes120FPS() {
+    func testFallsBackTo60FPSWhen120FPSIsUnsupported() {
         let selected = CameraCapturePolicy.preferredFormat(from: [
-            CameraFormatOption(index: 0, width: 1920, height: 1080, frameRate: 120),
+            CameraFormatOption(index: 0, width: 1920, height: 1080, frameRate: 60),
+            CameraFormatOption(index: 1, width: 1280, height: 720, frameRate: 30)
+        ])
+
+        XCTAssertEqual(selected?.index, 0)
+    }
+
+    func testFallsBackTo30FPSAndExcludesUnlistedRates() {
+        let selected = CameraCapturePolicy.preferredFormat(from: [
+            CameraFormatOption(index: 0, width: 1920, height: 1080, frameRate: 240),
             CameraFormatOption(index: 1, width: 1280, height: 720, frameRate: 30)
         ])
 
@@ -45,7 +64,7 @@ final class CameraCapturePolicyTests: XCTestCase {
     func testReturnsNoFormatWithoutSupportedPolicyRate() {
         XCTAssertNil(CameraCapturePolicy.preferredFormat(from: []))
         XCTAssertNil(CameraCapturePolicy.preferredFormat(from: [
-            CameraFormatOption(index: 0, width: 1920, height: 1080, frameRate: 120),
+            CameraFormatOption(index: 0, width: 1920, height: 1080, frameRate: 240),
             CameraFormatOption(index: 1, width: 1920, height: 1080, frameRate: 24)
         ]))
     }
@@ -173,5 +192,119 @@ final class CameraCapturePolicyTests: XCTestCase {
 
         XCTAssertEqual(duration.value, 1)
         XCTAssertEqual(duration.timescale, Int32.max)
+    }
+
+    func testExposureUsesExactOneMillisecondRationalDuration() throws {
+        let duration = try XCTUnwrap(CameraCapturePolicy.clampedMaximumExposureDuration(
+            minimum: CMTime(value: 1, timescale: 100_000),
+            maximum: CMTime(value: 1, timescale: 2),
+            frameDuration: CMTime(value: 1, timescale: 120)
+        ))
+
+        XCTAssertEqual(duration.value, 1)
+        XCTAssertEqual(duration.timescale, 1_000)
+    }
+
+    func testExposurePreservesFractionalHardwareMinimumAboveRequest() throws {
+        let minimum = CMTime(value: 1_001, timescale: 1_000_000)
+        let duration = try XCTUnwrap(CameraCapturePolicy.clampedMaximumExposureDuration(
+            minimum: minimum,
+            maximum: CMTime(value: 1, timescale: 30),
+            frameDuration: CMTime(value: 1, timescale: 120)
+        ))
+
+        XCTAssertEqual(duration.value, minimum.value)
+        XCTAssertEqual(duration.timescale, minimum.timescale)
+    }
+
+    func testExposurePreservesFractionalHardwareMaximumBelowRequest() throws {
+        let maximum = CMTime(value: 999, timescale: 1_000_000)
+        let duration = try XCTUnwrap(CameraCapturePolicy.clampedMaximumExposureDuration(
+            minimum: CMTime(value: 1, timescale: 100_000),
+            maximum: maximum,
+            frameDuration: CMTime(value: 1, timescale: 120)
+        ))
+
+        XCTAssertEqual(duration.value, maximum.value)
+        XCTAssertEqual(duration.timescale, maximum.timescale)
+    }
+
+    func testExposurePreservesFrameDurationWhenItIsTheTighterUpperBound() throws {
+        let frameDuration = CMTime(value: 999, timescale: 1_000_000)
+        let duration = try XCTUnwrap(CameraCapturePolicy.clampedMaximumExposureDuration(
+            minimum: CMTime(value: 1, timescale: 100_000),
+            maximum: CMTime(value: 1, timescale: 30),
+            frameDuration: frameDuration
+        ))
+
+        XCTAssertEqual(duration.value, frameDuration.value)
+        XCTAssertEqual(duration.timescale, frameDuration.timescale)
+    }
+
+    func testExposurePreservesHardwareMinimumAtExactRequestBoundary() throws {
+        let minimum = CMTime(value: 10, timescale: 10_000)
+        let duration = try XCTUnwrap(CameraCapturePolicy.clampedMaximumExposureDuration(
+            minimum: minimum,
+            maximum: CMTime(value: 1, timescale: 30),
+            frameDuration: CMTime(value: 1, timescale: 120)
+        ))
+
+        XCTAssertEqual(duration.value, minimum.value)
+        XCTAssertEqual(duration.timescale, minimum.timescale)
+    }
+
+    func testExposurePreservesHardwareMaximumAtExactRequestBoundary() throws {
+        let maximum = CMTime(value: 10, timescale: 10_000)
+        let duration = try XCTUnwrap(CameraCapturePolicy.clampedMaximumExposureDuration(
+            minimum: CMTime(value: 1, timescale: 100_000),
+            maximum: maximum,
+            frameDuration: CMTime(value: 1, timescale: 120)
+        ))
+
+        XCTAssertEqual(duration.value, maximum.value)
+        XCTAssertEqual(duration.timescale, maximum.timescale)
+    }
+
+    func testExposurePreservesEqualHardwareBounds() throws {
+        let bound = CMTime(value: 1_001, timescale: 1_000_000)
+        let duration = try XCTUnwrap(CameraCapturePolicy.clampedMaximumExposureDuration(
+            minimum: bound, maximum: bound, frameDuration: CMTime(value: 1, timescale: 120)
+        ))
+
+        XCTAssertEqual(duration.value, bound.value)
+        XCTAssertEqual(duration.timescale, bound.timescale)
+    }
+
+    func testExposureRejectsInvalidOrNonpositiveBoundsAndFrameDuration() {
+        let invalid: [CMTime] = [.invalid, .indefinite, .positiveInfinity, .negativeInfinity, .zero,
+                                 CMTime(value: -1, timescale: 1_000)]
+        for value in invalid {
+            XCTAssertNil(CameraCapturePolicy.clampedMaximumExposureDuration(
+                minimum: value, maximum: CMTime(value: 1, timescale: 30),
+                frameDuration: CMTime(value: 1, timescale: 120)
+            ))
+            XCTAssertNil(CameraCapturePolicy.clampedMaximumExposureDuration(
+                minimum: CMTime(value: 1, timescale: 100_000), maximum: value,
+                frameDuration: CMTime(value: 1, timescale: 120)
+            ))
+            XCTAssertNil(CameraCapturePolicy.clampedMaximumExposureDuration(
+                minimum: CMTime(value: 1, timescale: 100_000),
+                maximum: CMTime(value: 1, timescale: 30), frameDuration: value
+            ))
+        }
+    }
+
+    func testExposureRejectsReversedHardwareBounds() {
+        XCTAssertNil(CameraCapturePolicy.clampedMaximumExposureDuration(
+            minimum: CMTime(value: 1, timescale: 30), maximum: CMTime(value: 1, timescale: 1_000),
+            frameDuration: CMTime(value: 1, timescale: 120)
+        ))
+    }
+
+    func testExposureSkipsIncompatibleFrameDurationInsteadOfExceedingHardwareMinimum() {
+        XCTAssertNil(CameraCapturePolicy.clampedMaximumExposureDuration(
+            minimum: CMTime(value: 1, timescale: 1_000), maximum: CMTime(value: 1, timescale: 30),
+            frameDuration: CMTime(value: 1, timescale: 2_000)
+        ))
     }
 }

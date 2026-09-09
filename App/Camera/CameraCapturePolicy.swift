@@ -9,19 +9,19 @@ struct CameraFormatOption: Equatable {
 }
 
 enum CameraCapturePolicy {
-    static let preferredFrameRates = [60, 30]
+    static let preferredFrameRates = [120, 60, 30]
     static let preferredWidth: Int32 = 1920
     static let preferredHeight: Int32 = 1080
 
     static func preferredFormat(from options: [CameraFormatOption]) -> CameraFormatOption? {
         options.filter { preferredFrameRates.contains($0.frameRate) }.sorted { lhs, rhs in
+            if lhs.frameRate != rhs.frameRate {
+                return frameRatePriority(lhs.frameRate) < frameRatePriority(rhs.frameRate)
+            }
             let lhsIsPreferredSize = hasPreferredDimensions(lhs)
             let rhsIsPreferredSize = hasPreferredDimensions(rhs)
             if lhsIsPreferredSize != rhsIsPreferredSize {
                 return lhsIsPreferredSize
-            }
-            if lhs.frameRate != rhs.frameRate {
-                return frameRatePriority(lhs.frameRate) < frameRatePriority(rhs.frameRate)
             }
             let lhsArea = Int64(lhs.width) * Int64(lhs.height)
             let rhsArea = Int64(rhs.width) * Int64(rhs.height)
@@ -45,6 +45,26 @@ enum CameraCapturePolicy {
         let requested = CMTime(value: 1, timescale: CMTimeScale(frameRate))
         if CMTimeCompare(requested, minimum) < 0 { return minimum }
         if CMTimeCompare(requested, maximum) > 0 { return maximum }
+        return requested
+    }
+
+    static func clampedMaximumExposureDuration(
+        minimum: CMTime,
+        maximum: CMTime,
+        frameDuration: CMTime
+    ) -> CMTime? {
+        guard minimum.isNumeric, maximum.isNumeric, frameDuration.isNumeric,
+              CMTimeCompare(minimum, .zero) > 0,
+              CMTimeCompare(maximum, minimum) >= 0,
+              CMTimeCompare(frameDuration, minimum) >= 0 else {
+            return nil
+        }
+        let upperBound = CMTimeCompare(maximum, frameDuration) <= 0 ? maximum : frameDuration
+        let requested = CMTime(value: 1, timescale: 1_000)
+        // Keep the hardware's rational endpoints, even when an endpoint has
+        // the same seconds value as the request but a different timescale.
+        if CMTimeCompare(requested, minimum) <= 0 { return minimum }
+        if CMTimeCompare(requested, upperBound) >= 0 { return upperBound }
         return requested
     }
 

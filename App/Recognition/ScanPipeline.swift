@@ -3,7 +3,7 @@ import Foundation
 import ImageIO
 
 /// Owns all off-main-thread recognition state. At most one Core ML request runs
-/// at once so camera frames cannot build an inference backlog.
+/// at once; pending captures have a separate bounded, priority-aware reservoir.
 final class ScanPipeline {
     typealias SessionID = ScanSessionGate.SessionID
 
@@ -14,7 +14,8 @@ final class ScanPipeline {
     var onDetections: ((SessionID, [CardDetection]) -> Void)?
     var onError: ((SessionID, Error) -> Void)?
 
-    private let frameSampler = SharpFrameSampler()
+    private let backlog = CaptureBacklog<CapturedImage>()
+    private let activityMeter = CaptureActivityMeter()
     private let sessionGate = ScanSessionGate()
     private let processingQueue = DispatchQueue(label: "com.cardscanmagic.recognition", qos: .userInitiated)
     private var engine: RecognitionEngine?
@@ -35,6 +36,9 @@ final class ScanPipeline {
                     if self.engine == nil {
                         self.engine = try RecognitionEngine()
                     }
+                    if let sessionID = self.sessionGate.activeSessionForSampling() {
+                        self.scheduleDrain(for: sessionID)
+                    }
                     continuation.resume(returning: ())
                 } catch {
                     continuation.resume(throwing: error)
@@ -48,7 +52,8 @@ final class ScanPipeline {
     @discardableResult
     func start() -> SessionID {
         let sessionID = sessionGate.start()
-        frameSampler.reset()
+        backlog.reset(generation: sessionID)
+        activityMeter.reset(generation: sessionID)
         resetCoordinator(for: sessionID, clearsDetections: false)
         return sessionID
     }
@@ -57,7 +62,8 @@ final class ScanPipeline {
     /// request may still finish, but its result can no longer be delivered.
     func stop() {
         sessionGate.stop()
-        frameSampler.reset()
+        backlog.reset(generation: 0)
+        activityMeter.reset(generation: 0)
     }
 
     /// Clears recorded cards without stopping the camera. It deliberately
@@ -66,7 +72,8 @@ final class ScanPipeline {
     @discardableResult
     func resetRecordedState() -> SessionID? {
         guard let sessionID = sessionGate.resetRecordedState() else { return nil }
-        frameSampler.reset()
+        backlog.reset(generation: sessionID)
+        activityMeter.reset(generation: sessionID)
         resetCoordinator(for: sessionID, clearsDetections: true)
         return sessionID
     }
@@ -76,35 +83,37 @@ final class ScanPipeline {
         timestamp: TimeInterval,
         orientation: CGImagePropertyOrientation
     ) {
-        guard let sessionID = sessionGate.activeSessionForSampling() else { return }
-        let inferenceAvailable = sessionGate.canStartInference(for: sessionID)
-        guard let selectedFrame = frameSampler.select(
-            pixelBuffer: pixelBuffer,
-            timestamp: timestamp,
-            orientation: orientation,
-            allowsInference: inferenceAvailable
-        ), sessionGate.beginInference(for: sessionID) else {
-            return
-        }
+        guard timestamp.isFinite,
+              let sessionID = sessionGate.activeSessionForSampling() else { return }
+        let activity = activityMeter.measure(pixelBuffer, generation: sessionID)
+        guard let image = CapturedImage.copy(pixelBuffer, orientation: orientation) else { return }
+        guard sessionGate.shouldDeliver(for: sessionID) else { return }
+        backlog.insert(image, timestamp: timestamp, priority: activity, bytes: image.bytes, generation: sessionID)
+        scheduleDrain(for: sessionID)
+    }
 
+    private func scheduleDrain(for sessionID: SessionID) {
+        guard backlog.hasFrames(generation: sessionID), sessionGate.beginInference(for: sessionID) else { return }
         processingQueue.async { [weak self] in
             guard let self else { return }
-            defer { self.sessionGate.finishInference() }
+            defer {
+                self.sessionGate.finishInference()
+                // A start before prepare must not reschedule an empty-engine
+                // drain forever. Successful prepare wakes pending captures.
+                if self.engine != nil, let current = self.sessionGate.activeSessionForSampling() {
+                    self.scheduleDrain(for: current)
+                }
+            }
 
-            guard self.sessionGate.shouldDeliver(for: sessionID), let engine = self.engine else {
+            guard self.sessionGate.shouldDeliver(for: sessionID), let engine = self.engine,
+                  let frame = self.backlog.take(generation: sessionID) else {
                 return
             }
 
             do {
-                // RecognitionEngine normally performs one full-frame pass;
-                // its bounded near-card ROI fallback is activated when that
-                // pass has no result strong enough to survive the coordinator.
-                // Keeping this call inside the single in-flight gate prevents
-                // ROI passes from building a backlog behind later frames.
-                let detections = try engine.recognize(
-                    pixelBuffer: selectedFrame.0,
-                    orientation: selectedFrame.2
-                )
+                let detections = try autoreleasepool {
+                    try engine.recognize(pixelBuffer: frame.value.pixelBuffer, orientation: frame.value.orientation)
+                }
                 guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
 
                 // Use the camera sample's monotonic timestamp rather than the
@@ -112,7 +121,7 @@ final class ScanPipeline {
                 // latency can vary from frame to frame; using Date() here
                 // makes a fast pass look stationary and breaks track timeout
                 // and duplicate cooldown decisions.
-                let captureDate = Date(timeIntervalSinceReferenceDate: selectedFrame.1)
+                let captureDate = Date(timeIntervalSinceReferenceDate: frame.timestamp)
                 let update = self.coordinator.processUpdate(detections, at: captureDate)
                 guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
 
@@ -123,6 +132,7 @@ final class ScanPipeline {
                 self.onRecords?(sessionID, update.records)
             } catch {
                 guard self.sessionGate.failCurrentSession(for: sessionID) else { return }
+                self.backlog.discard(generation: sessionID)
                 self.onError?(sessionID, error)
             }
         }
@@ -137,6 +147,7 @@ final class ScanPipeline {
 
             self.coordinator.reset()
             guard self.sessionGate.markCoordinatorReady(for: sessionID) else { return }
+            self.scheduleDrain(for: sessionID)
 
             if clearsDetections, self.sessionGate.shouldDeliver(for: sessionID) {
                 self.onDetections?(sessionID, [])

@@ -40,6 +40,230 @@ final class CardEventCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.process([detection], at: start.addingTimeInterval(0.04)).count, 1)
     }
 
+    func testSupportedSingleCaptureProducesRecordAndOverlay() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let detection = CardDetection(
+            card: card,
+            confidence: 0.85,
+            boundingBox: CGRect(x: -0.02, y: 0.3, width: 0.15, height: 0.2),
+            hasIndependentSupport: true
+        )
+
+        let update = coordinator.processUpdate(
+            [detection],
+            at: Date(timeIntervalSinceReferenceDate: 100)
+        )
+
+        XCTAssertEqual(update.records.map(\.card), [card])
+        XCTAssertEqual(update.stableDetections.map(\.card), [card])
+        let stable = try XCTUnwrap(update.stableDetections.first)
+        XCTAssertTrue(stable.hasIndependentSupport)
+        XCTAssertEqual(stable.boundingBox.minX, 0)
+    }
+
+    func testUnsupportedSingleCaptureDoesNotProduceOverlayEvenAtFullConfidence() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let detection = CardDetection(
+            card: card,
+            confidence: 1,
+            boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3)
+        )
+
+        let update = coordinator.processUpdate(
+            [detection],
+            at: Date(timeIntervalSinceReferenceDate: 100)
+        )
+
+        XCTAssertTrue(update.records.isEmpty)
+        XCTAssertTrue(update.stableDetections.isEmpty)
+    }
+
+    func testWeakSupportedSingleCaptureStillWaitsForAnotherCapture() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let detection = CardDetection(
+            card: card,
+            confidence: 0.849,
+            boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3),
+            hasIndependentSupport: true
+        )
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+
+        let first = coordinator.processUpdate([detection], at: start)
+        XCTAssertTrue(first.records.isEmpty)
+        XCTAssertTrue(first.stableDetections.isEmpty)
+        let next = coordinator.processUpdate([detection], at: start.addingTimeInterval(0.04))
+        XCTAssertEqual(next.records.map(\.card), [card])
+        XCTAssertTrue(try XCTUnwrap(next.stableDetections.first).hasIndependentSupport)
+    }
+
+    func testRepeatedTimestampDoesNotSupplyTemporalConfirmation() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let detection = CardDetection(
+            card: card,
+            confidence: 0.93,
+            boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3)
+        )
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+
+        XCTAssertTrue(coordinator.processUpdate([detection], at: start).records.isEmpty)
+        for _ in 0..<3 {
+            let repeated = coordinator.processUpdate([detection], at: start)
+            XCTAssertTrue(repeated.records.isEmpty)
+            XCTAssertTrue(repeated.stableDetections.isEmpty)
+        }
+        XCTAssertTrue(coordinator.process([detection], at: start.addingTimeInterval(-0.01)).isEmpty)
+        let next = coordinator.processUpdate([detection], at: start.addingTimeInterval(0.04))
+        XCTAssertEqual(next.records.map(\.card), [card])
+    }
+
+    func testTwoDetectionsWithinOneCaptureDoNotSupplyTemporalConfirmation() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let detection = CardDetection(
+            card: card,
+            confidence: 0.93,
+            boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3)
+        )
+
+        let update = coordinator.processUpdate(
+            [detection, detection],
+            at: Date(timeIntervalSinceReferenceDate: 100)
+        )
+
+        XCTAssertTrue(update.records.isEmpty)
+        XCTAssertTrue(update.stableDetections.isEmpty)
+    }
+
+    func testNextCaptureAfter150MillisecondsWithSameGeometryConfirms() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let detection = CardDetection(
+            card: card,
+            confidence: 0.7,
+            boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.08, height: 0.12)
+        )
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+
+        XCTAssertTrue(coordinator.process([detection], at: start).isEmpty)
+        XCTAssertEqual(
+            coordinator.process([detection], at: start.addingTimeInterval(0.15)).map(\.card),
+            [card]
+        )
+    }
+
+    func testDelayedInitialLinkRequiresTightGeometry() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+        let first = CardDetection(
+            card: card,
+            confidence: 0.9,
+            boundingBox: CGRect(x: 0.1, y: 0.3, width: 0.08, height: 0.12)
+        )
+        let moved = CardDetection(
+            card: card,
+            confidence: 0.9,
+            boundingBox: CGRect(x: 0.3, y: 0.3, width: 0.08, height: 0.12)
+        )
+
+        XCTAssertTrue(coordinator.process([first], at: start).isEmpty)
+        XCTAssertTrue(coordinator.process([moved], at: start.addingTimeInterval(0.15)).isEmpty)
+    }
+
+    func testDelayedInitialLinkRejectsLargeSizeChange() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+        let first = CardDetection(
+            card: card,
+            confidence: 0.9,
+            boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.04, height: 0.06)
+        )
+        let grown = CardDetection(
+            card: card,
+            confidence: 0.9,
+            boundingBox: CGRect(x: 0.38, y: 0.27, width: 0.08, height: 0.12)
+        )
+
+        XCTAssertTrue(coordinator.process([first], at: start).isEmpty)
+        XCTAssertTrue(coordinator.process([grown], at: start.addingTimeInterval(0.15)).isEmpty)
+    }
+
+    func testInitialLinkStopsAfter250Milliseconds() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let detection = CardDetection(
+            card: card,
+            confidence: 0.9,
+            boundingBox: CGRect(x: 0.4, y: 0.3, width: 0.08, height: 0.12)
+        )
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+
+        XCTAssertTrue(coordinator.process([detection], at: start).isEmpty)
+        XCTAssertTrue(coordinator.process([detection], at: start.addingTimeInterval(0.251)).isEmpty)
+    }
+
+    func testConflictingSupportedLabelsWaitForNewEvidence() throws {
+        let coordinator = CardEventCoordinator()
+        let ace = try XCTUnwrap(CardFace.parse("Ah"))
+        let seven = try XCTUnwrap(CardFace.parse("7h"))
+        let box = CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3)
+        let detections = [ace, seven].map {
+            CardDetection(card: $0, confidence: 0.93, boundingBox: box, hasIndependentSupport: true)
+        }
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+
+        let first = coordinator.processUpdate(detections, at: start)
+        XCTAssertTrue(first.records.isEmpty)
+        XCTAssertTrue(first.stableDetections.isEmpty)
+        let noNewEvidence = coordinator.processUpdate([], at: start.addingTimeInterval(0.1))
+        XCTAssertTrue(noNewEvidence.records.isEmpty)
+        XCTAssertTrue(noNewEvidence.stableDetections.isEmpty)
+        XCTAssertEqual(
+            coordinator.process([detections[0]], at: start.addingTimeInterval(0.15)).map(\.card),
+            [ace]
+        )
+    }
+
+    func testSupportedCornersAndLaterPassDoNotDuplicateOneFace() throws {
+        let coordinator = CardEventCoordinator()
+        let card = try XCTUnwrap(CardFace.parse("7h"))
+        let detections = [CGFloat(0.1), CGFloat(0.7)].map {
+            CardDetection(
+                card: card,
+                confidence: 0.93,
+                boundingBox: CGRect(x: $0, y: 0.3, width: 0.04, height: 0.06),
+                hasIndependentSupport: true
+            )
+        }
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+
+        let first = coordinator.processUpdate(detections, at: start)
+        XCTAssertEqual(first.records.map(\.card), [card])
+        XCTAssertEqual(first.stableDetections.map(\.card), [card])
+        XCTAssertTrue(coordinator.process(detections, at: start.addingTimeInterval(0.04)).isEmpty)
+        XCTAssertTrue(coordinator.process(detections, at: start.addingTimeInterval(0.8)).isEmpty)
+    }
+
+    func testSupportedConflictingFlickerDoesNotCreateSecondRecordOrOverlay() throws {
+        let coordinator = CardEventCoordinator()
+        let ace = try XCTUnwrap(CardFace.parse("Ah"))
+        let seven = try XCTUnwrap(CardFace.parse("7h"))
+        let box = CGRect(x: 0.4, y: 0.3, width: 0.2, height: 0.3)
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+        let first = CardDetection(card: ace, confidence: 0.93, boundingBox: box, hasIndependentSupport: true)
+        let flicker = CardDetection(card: seven, confidence: 0.95, boundingBox: box, hasIndependentSupport: true)
+
+        XCTAssertEqual(coordinator.process([first], at: start).map(\.card), [ace])
+        let next = coordinator.processUpdate([flicker], at: start.addingTimeInterval(0.04))
+        XCTAssertTrue(next.records.isEmpty)
+        XCTAssertFalse(next.stableDetections.contains { $0.card == seven })
+    }
+
     func testConflictingLatestHighConfidenceDoesNotOverrideConsensus() throws {
         let coordinator = CardEventCoordinator()
         let aceHearts = try XCTUnwrap(CardFace.parse("Ah"))
