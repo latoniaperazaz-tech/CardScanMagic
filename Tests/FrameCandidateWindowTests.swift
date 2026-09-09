@@ -51,7 +51,7 @@ final class FrameCandidateWindowTests: XCTestCase {
     func testRejectsOutOfOrderAndInvalidFrames() {
         var window = FrameCandidateWindow()
 
-        XCTAssertFalse(window.insert(timestamp: .infinity, sharpness: 50))
+        XCTAssertFalse(window.insert(timestamp: Double.infinity, sharpness: 50))
         XCTAssertFalse(window.insert(timestamp: 10, sharpness: -1))
         XCTAssertTrue(window.insert(timestamp: 10, sharpness: 25))
         XCTAssertFalse(window.insert(timestamp: 9.99, sharpness: 50))

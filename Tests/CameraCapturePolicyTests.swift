@@ -35,7 +35,7 @@ final class CameraCapturePolicyTests: XCTestCase {
             CameraCapturePolicy.clampedMaximumExposureSeconds(
                 minimum: 1.0 / 1_000.0,
                 maximum: 1.0 / 30.0
-            ),
+            )!,
             1.0 / 500.0,
             accuracy: 0.000_000_1
         )
@@ -43,7 +43,7 @@ final class CameraCapturePolicyTests: XCTestCase {
             CameraCapturePolicy.clampedMaximumExposureSeconds(
                 minimum: 1.0 / 240.0,
                 maximum: 1.0 / 30.0
-            ),
+            )!,
             1.0 / 240.0,
             accuracy: 0.000_000_1
         )

@@ -90,7 +90,7 @@ final class CardEventCoordinatorTests: XCTestCase {
         let invalid = CardDetection(
             card: aceHearts,
             confidence: 0.9,
-            boundingBox: CGRect(x: .infinity, y: 0, width: 0.2, height: 0.3)
+            boundingBox: CGRect(x: CGFloat.infinity, y: 0, width: 0.2, height: 0.3)
         )
 
         XCTAssertTrue(coordinator.process([low, invalid], at: start).isEmpty)

@@ -38,7 +38,7 @@ final class RecognitionROITests: XCTestCase {
         XCTAssertTrue(RecognitionEngine.nearRegions(for: .zero).isEmpty)
         XCTAssertTrue(
             RecognitionEngine.nearRegions(
-                for: CGSize(width: .infinity, height: 1920)
+                for: CGSize(width: CGFloat.infinity, height: 1920)
             ).isEmpty
         )
     }
