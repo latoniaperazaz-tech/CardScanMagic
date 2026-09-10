@@ -7,6 +7,16 @@ struct CardEventUpdate {
     /// them for overlays so a visible label always agrees with a card that is
     /// eligible to be written to the history.
     let stableDetections: [CardDetection]
+    var decisions: [CardPassDecision] = []
+}
+
+/// PHASE 1 publishes confirmed physical passes only. This is not the PHASE 2
+/// cardness/UNKNOWN classifier. A frame can contribute to a pass, never record itself.
+struct CardPassDecision {
+    let eventID: UUID
+    let record: CardRecord
+    let captureTimestamps: Set<TimeInterval>
+    let duplicateCard: Bool
 }
 
 /// Converts noisy detector output into one record per card pass. A label must
@@ -29,6 +39,8 @@ final class CardEventCoordinator {
         var lastSeen: Date
         var hitCount: Int
         var wasRecorded: Bool
+        var captures: Set<TimeInterval>
+        var observationBoxes: [TimeInterval: CGRect]
 
         init(detection: CardDetection, date: Date) {
             id = UUID()
@@ -43,6 +55,8 @@ final class CardEventCoordinator {
             lastSeen = date
             hitCount = 1
             wasRecorded = false
+            captures = [date.timeIntervalSinceReferenceDate]
+            observationBoxes = [date.timeIntervalSinceReferenceDate: detection.boundingBox]
         }
     }
 
@@ -57,6 +71,7 @@ final class CardEventCoordinator {
 
     private var tracks: [Track] = []
     private var recentRecordedPasses: [RecentRecordedPass] = []
+    private var retiredCaptures: [UUID: (lastSeen: Date, captures: Set<TimeInterval>, boxes: [TimeInterval: CGRect])] = [:]
     private var recordedCards = Set<CardFace>()
     private var lastTimestamp: Date?
 
@@ -102,6 +117,7 @@ final class CardEventCoordinator {
     func reset() {
         tracks.removeAll()
         recentRecordedPasses.removeAll()
+        retiredCaptures.removeAll()
         recordedCards.removeAll()
         lastTimestamp = nil
     }
@@ -124,14 +140,19 @@ final class CardEventCoordinator {
         }
         lastTimestamp = date
 
-        tracks.removeAll { date.timeIntervalSince($0.lastSeen) > trackTimeout }
-        recentRecordedPasses.removeAll {
-            date.timeIntervalSince($0.date) > recentPassGuardWindow
-        }
-
         let validDetections = detections
             .compactMap { sanitizedDetection($0) }
             .sorted { $0.confidence > $1.confidence }
+        // No detections is not proof of an empty ROI. Preserve tracks through
+        // one or two missed frames and use the existing motion/timeout gates.
+        for track in tracks where date.timeIntervalSince(track.lastSeen) > trackTimeout {
+            retiredCaptures[track.id] = (track.lastSeen, track.captures, track.observationBoxes)
+        }
+        tracks.removeAll { date.timeIntervalSince($0.lastSeen) > trackTimeout }
+        retiredCaptures = retiredCaptures.filter { date.timeIntervalSince($0.value.lastSeen) <= 4 }
+        recentRecordedPasses.removeAll {
+            date.timeIntervalSince($0.date) > recentPassGuardWindow
+        }
 
         var matchedTrackIDs = Set<UUID>()
         for detection in validDetections {
@@ -149,17 +170,20 @@ final class CardEventCoordinator {
         }
 
         var records: [CardRecord] = []
+        var decisions: [CardPassDecision] = []
+        // A model can report both printed corners in one capture. Within this
+        // simultaneous observation, same-face corners share one physical event.
+        var recordedInThisCapture = Set<CardFace>()
         for index in tracks.indices where !tracks[index].wasRecorded
             && matchedTrackIDs.contains(tracks[index].id) {
             guard let stableCard = stableCard(in: tracks[index].votes),
-                  !recordedCards.contains(stableCard.card),
                   !hasUnresolvedLabelConflict(for: tracks[index], at: date),
                   !hasRecentPassConflict(for: tracks[index], at: date) else {
                 continue
             }
 
             tracks[index].wasRecorded = true
-            recordedCards.insert(stableCard.card)
+            guard recordedInThisCapture.insert(stableCard.card).inserted else { continue }
             recentRecordedPasses.append(
                 RecentRecordedPass(
                     date: date,
@@ -167,13 +191,17 @@ final class CardEventCoordinator {
                     velocity: tracks[index].velocity
                 )
             )
-            records.append(
-                CardRecord(
+            let record = CardRecord(
+                    id: tracks[index].id,
                     card: stableCard.card,
                     confidence: stableCard.confidence,
                     recordedAt: date
                 )
-            )
+            let duplicateCard = !recordedCards.insert(stableCard.card).inserted
+            if !duplicateCard { records.append(record) }
+            decisions.append(CardPassDecision(eventID: tracks[index].id, record: record,
+                                               captureTimestamps: tracks[index].captures,
+                                               duplicateCard: duplicateCard))
         }
 
         let stableDetections = tracks.compactMap { track -> CardDetection? in
@@ -202,7 +230,33 @@ final class CardEventCoordinator {
             displayedCards.insert(detection.card).inserted
         }
 
-        return CardEventUpdate(records: records, stableDetections: uniqueStableDetections)
+        return CardEventUpdate(records: records, stableDetections: uniqueStableDetections, decisions: decisions)
+    }
+
+    /// Value snapshots let historical frame results be replayed in capture order
+    /// without resetting already committed track state or inventing timestamps.
+    func copy() -> CardEventCoordinator {
+        let result = CardEventCoordinator()
+        result.tracks = tracks
+        result.recentRecordedPasses = recentRecordedPasses
+        result.retiredCaptures = retiredCaptures
+        result.recordedCards = recordedCards
+        result.lastTimestamp = lastTimestamp
+        return result
+    }
+
+    var trackCaptureMemberships: [UUID: Set<TimeInterval>] {
+        var result: [UUID: Set<TimeInterval>] = [:]
+        for (id, capture) in retiredCaptures { result[id] = capture.captures }
+        for track in tracks { result[track.id] = track.captures }
+        return result
+    }
+
+    var trackObservationBoxes: [UUID: [TimeInterval: CGRect]] {
+        var result: [UUID: [TimeInterval: CGRect]] = [:]
+        for (id, capture) in retiredCaptures { result[id] = capture.boxes }
+        for track in tracks { result[track.id] = track.observationBoxes }
+        return result
     }
 
     private func sanitizedDetection(_ detection: CardDetection) -> CardDetection? {
@@ -280,6 +334,13 @@ final class CardEventCoordinator {
         track.orientedImageSize = detection.orientedImageSize
         track.lastSeen = date
         track.hitCount += 1
+        track.captures.insert(date.timeIntervalSinceReferenceDate)
+        track.observationBoxes[date.timeIntervalSinceReferenceDate] = detection.boundingBox
+        // Identity evidence is bounded independently of the five label votes.
+        if track.captures.count > 240 {
+            track.captures = Set(track.captures.sorted().suffix(240))
+            track.observationBoxes = track.observationBoxes.filter { track.captures.contains($0.key) }
+        }
         track.votes.append(Vote(
             label: detection.card,
             confidence: detection.confidence,
@@ -297,8 +358,7 @@ final class CardEventCoordinator {
 
         for index in tracks.indices {
             let track = tracks[index]
-            guard !excludedIDs.contains(track.id),
-                  track.votes.last?.label == detection.card else {
+            guard !excludedIDs.contains(track.id) else {
                 continue
             }
 
@@ -324,6 +384,13 @@ final class CardEventCoordinator {
             )
             let overlap = predictedBox.intersectionOverUnion(with: detection.boundingBox)
             let centerDistance = predictedCenter.distance(to: detection.boundingBox.center)
+            let sameLabel = track.votes.last?.label == detection.card
+            if !sameLabel {
+                // Permit a brief label flicker only on an already confirmed,
+                // tightly continuous trajectory. A later entrant is a new track.
+                guard track.wasRecorded, age <= 0.09,
+                      overlap >= 0.5 || centerDistance <= 0.025 else { continue }
+            }
 
             let distanceGate: CGFloat
             if track.hitCount == 1 {

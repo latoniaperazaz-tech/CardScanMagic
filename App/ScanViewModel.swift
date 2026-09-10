@@ -23,6 +23,8 @@ final class ScanViewModel: ObservableObject {
     private var startRequestID: UInt64 = 0
 
     init() {
+        camera.onDroppedFrame = { [weak self] in self?.pipeline.cameraDroppedFrame() }
+        camera.onCallbackCompleted = { [weak self] duration in self?.pipeline.cameraCallbackCompleted(duration: duration) }
         camera.onFrame = { [weak self] pixelBuffer, timestamp, orientation in
             self?.pipeline.submit(
                 pixelBuffer: pixelBuffer,

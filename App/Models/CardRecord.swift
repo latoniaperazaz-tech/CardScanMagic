@@ -78,8 +78,15 @@ struct CardFace: Equatable, Hashable {
 }
 
 struct CardRecord: Identifiable, Equatable {
-    let id = UUID()
+    let id: UUID
     let card: CardFace
     let confidence: Float
     let recordedAt: Date
+
+    init(id: UUID = UUID(), card: CardFace, confidence: Float, recordedAt: Date) {
+        self.id = id
+        self.card = card
+        self.confidence = confidence
+        self.recordedAt = recordedAt
+    }
 }

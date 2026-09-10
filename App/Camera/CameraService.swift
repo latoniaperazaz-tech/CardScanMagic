@@ -28,11 +28,14 @@ final class CameraService: NSObject {
     /// the sensor's landscape memory while others deliver portrait pixels, so
     /// this is determined per sample rather than assumed at setup time.
     var onFrame: ((CVPixelBuffer, TimeInterval, CGImagePropertyOrientation) -> Void)?
+    var onDroppedFrame: (() -> Void)?
+    var onCallbackCompleted: ((TimeInterval) -> Void)?
     var onError: ((Error) -> Void)?
     var onModeChanged: ((Int) -> Void)?
 
     private let sessionQueue = DispatchQueue(label: "com.cardscanmagic.camera.session")
     private let outputQueue = DispatchQueue(label: "com.cardscanmagic.camera.frames")
+    private let loggingQueue = DispatchQueue(label: "com.cardscanmagic.camera.logging", qos: .utility)
     private let runStateLock = NSLock()
     private let diagnosticsLock = NSLock()
     private var isConfigured = false
@@ -182,7 +185,7 @@ final class CameraService: NSObject {
     private func configureBestFrameRate(for camera: AVCaptureDevice) throws -> Int {
         // Prefer short sampling intervals for fast passes. Each timing value
         // remains clamped to the selected device format's rational bounds.
-        let desiredRates = CameraCapturePolicy.preferredFrameRates
+        let desiredRates = CameraCapturePolicy.preferredFrameRates.filter { $0 <= 60 }
         let formats = camera.formats.enumerated().compactMap { index, format -> (format: AVCaptureDevice.Format, option: CameraFormatOption)? in
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             guard let rate = desiredRates.first(where: { supports(frameRate: Double($0), in: format) }) else {
@@ -345,6 +348,8 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
+        let callbackStart = ProcessInfo.processInfo.systemUptime
+        defer { onCallbackCompleted?(ProcessInfo.processInfo.systemUptime - callbackStart) }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
         emitDiagnostics(
@@ -360,6 +365,11 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         // fallback is `.right`).
         let orientation = Self.visionOrientation(for: pixelBuffer)
         onFrame?(pixelBuffer, timestamp, orientation)
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) {
+        onDroppedFrame?()
     }
 
     private func emitDiagnostics(
@@ -389,7 +399,7 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         diagnosticsLock.unlock()
 
         let exposureMilliseconds = camera.exposureDuration.seconds * 1_000
-        print(
+        let message =
             "[Camera] delivered=\(CVPixelBufferGetWidth(pixelBuffer))x"
                 + "\(CVPixelBufferGetHeight(pixelBuffer)) "
                 + String(format: "fps=%.1f exposure=%.3fms ISO=%.0f ",
@@ -398,7 +408,7 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
                 + "focusAdjusting=\(camera.isAdjustingFocus) "
                 + "exposureAdjusting=\(camera.isAdjustingExposure) "
                 + "stabilization=\(connection.activeVideoStabilizationMode.rawValue)"
-        )
+        loggingQueue.async { print(message) }
     }
 
     static func visionOrientation(for pixelBuffer: CVPixelBuffer) -> CGImagePropertyOrientation {

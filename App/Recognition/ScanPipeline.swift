@@ -2,179 +2,158 @@ import CoreVideo
 import Foundation
 import ImageIO
 
-/// Owns all off-main-thread recognition state. At most one Core ML request runs
-/// at once; pending captures have a separate bounded, priority-aware reservoir.
 final class ScanPipeline {
     typealias SessionID = ScanSessionGate.SessionID
-
-    /// Every delivery is tagged with the scan session that produced it. UI
-    /// consumers can therefore reject a queued main-actor update after a
-    /// pause, clear, or restart.
+    typealias Recognizer = (CVPixelBuffer, CGImagePropertyOrientation) throws -> [CardDetection]
     var onRecords: ((SessionID, [CardRecord]) -> Void)?
     var onDetections: ((SessionID, [CardDetection]) -> Void)?
     var onError: ((SessionID, Error) -> Void)?
-
-    private let backlog = CaptureBacklog<CapturedImage>()
-    private let activityMeter = CaptureActivityMeter()
+    var onDecisions: ((SessionID, [CardPassDecision]) -> Void)?
+    /// Metadata only: observers cannot accidentally retain an event's pixels.
+    var onCaptureEvent: ((SessionID, UInt64, Int, Bool) -> Void)?
+    private let scheduler: EventFrameScheduler<CapturedImage>
+    private let snapshotPool: CaptureSnapshotPool
+    private let motion: ROIMotionTrigger
     private let sessionGate = ScanSessionGate()
     private let processingQueue = DispatchQueue(label: "com.cardscanmagic.recognition", qos: .userInitiated)
+    private let debugQueue = DispatchQueue(label: "com.cardscanmagic.capture.debug", qos: .utility)
+    private let timeline = CardResultTimeline()
+    private let diagnostics = CaptureDiagnostics()
+    private let injectedRecognizer: Recognizer?
     private var engine: RecognitionEngine?
-    private var coordinator = CardEventCoordinator()
-    private var diagnosticsStart: TimeInterval = 0
-    private var analyzedFrames = 0
-    private var analysisSeconds: TimeInterval = 0
 
-    /// Loads the Core ML model away from the main actor. Calls are serialized
-    /// with inference and are idempotent, so multiple start requests cannot
-    /// create multiple engines.
+    init(configuration: CaptureConfiguration = CaptureConfiguration(), recognizer: Recognizer? = nil) {
+        scheduler = EventFrameScheduler(ringCapacity: configuration.historyCapacity,
+            preFrameCount: configuration.preFrames, postFrameCount: configuration.postFrames,
+            maximumEventFrames: configuration.maximumEventFrames,
+            maximumPendingEventFrames: configuration.pendingEventCapacity)
+        snapshotPool = CaptureSnapshotPool(maximumDimension: configuration.snapshotMaximumDimension,
+                                           byteLimit: configuration.snapshotByteLimit)
+        motion = ROIMotionTrigger(roi: configuration.motionROI, threshold: configuration.motionThreshold,
+                                 releaseThreshold: configuration.motionReleaseThreshold)
+        injectedRecognizer = recognizer
+    }
     func prepare() async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             processingQueue.async { [weak self] in
-                guard let self else {
-                    continuation.resume(throwing: CancellationError())
-                    return
-                }
-
+                guard let self else { continuation.resume(throwing: CancellationError()); return }
                 do {
-                    if self.engine == nil {
-                        self.engine = try RecognitionEngine()
-                    }
-                    if let sessionID = self.sessionGate.activeSessionForSampling() {
-                        self.scheduleDrain(for: sessionID)
-                    }
+                    if self.engine == nil && self.injectedRecognizer == nil { self.engine = try RecognitionEngine() }
+                    if let sessionID = self.sessionGate.activeSessionForSampling() { self.scheduleDrain(for: sessionID) }
                     continuation.resume(returning: ())
-                } catch {
-                    continuation.resume(throwing: error)
-                }
+                } catch { continuation.resume(throwing: error) }
             }
         }
     }
-
-    /// Starts a new recognition generation. The coordinator is reset on its
-    /// owning queue before frames for this generation are accepted.
     @discardableResult
     func start() -> SessionID {
         let sessionID = sessionGate.start()
-        backlog.reset(generation: sessionID)
-        activityMeter.reset(generation: sessionID)
+        resetCapture(generation: sessionID)
         resetCoordinator(for: sessionID, clearsDetections: false)
         return sessionID
     }
-
-    /// Invalidates the current generation immediately. An in-flight Vision
-    /// request may still finish, but its result can no longer be delivered.
-    func stop() {
-        sessionGate.stop()
-        backlog.reset(generation: 0)
-        activityMeter.reset(generation: 0)
-    }
-
-    /// Clears recorded cards without stopping the camera. It deliberately
-    /// creates a new generation so an older inference cannot repopulate the
-    /// just-cleared history or overlay.
+    func stop() { sessionGate.stop(); resetCapture(generation: 0) }
     @discardableResult
     func resetRecordedState() -> SessionID? {
         guard let sessionID = sessionGate.resetRecordedState() else { return nil }
-        backlog.reset(generation: sessionID)
-        activityMeter.reset(generation: sessionID)
+        resetCapture(generation: sessionID)
         resetCoordinator(for: sessionID, clearsDetections: true)
         return sessionID
     }
-
-    func submit(
-        pixelBuffer: CVPixelBuffer,
-        timestamp: TimeInterval,
-        orientation: CGImagePropertyOrientation
-    ) {
-        guard timestamp.isFinite,
-              let sessionID = sessionGate.activeSessionForSampling() else { return }
-        let activity = activityMeter.measure(pixelBuffer, generation: sessionID)
-        guard let image = CapturedImage.copy(pixelBuffer, orientation: orientation) else { return }
-        guard sessionGate.shouldDeliver(for: sessionID) else { return }
-        backlog.insert(image, timestamp: timestamp, priority: activity, bytes: image.bytes, generation: sessionID)
-        scheduleDrain(for: sessionID)
+    private func resetCapture(generation: UInt64) {
+        scheduler.reset(generation: generation)
+        motion.reset(generation: generation)
+        snapshotPool.reset()
     }
-
-    private func scheduleDrain(for sessionID: SessionID) {
-        guard backlog.hasFrames(generation: sessionID), sessionGate.beginInference(for: sessionID) else { return }
+    func submit(pixelBuffer: CVPixelBuffer, timestamp: TimeInterval, orientation: CGImagePropertyOrientation) {
+        let arrival = ProcessInfo.processInfo.systemUptime
+        guard timestamp.isFinite, timestamp >= 0,
+              let sessionID = sessionGate.activeSessionForSampling() else { return }
+        let measurement = motion.measure(pixelBuffer, generation: sessionID)
+        guard let image = snapshotPool.copy(pixelBuffer, orientation: orientation) else {
+            diagnostics.snapshotFailed(); return
+        }
+        guard sessionGate.shouldDeliver(for: sessionID) else { return }
+        let information = FrameInformationScorer.score(luma: measurement.sample, motionScore: measurement.score)
+        let frame = CaptureFrame(id: timestamp.bitPattern, generation: sessionID, timestamp: timestamp,
+            value: image, motionScore: measurement.score, informationScore: information, arrivalUptime: arrival)
+        if let event = scheduler.ingest(frame, triggered: measurement.triggered) {
+            let eventID = event.id, count = event.frames.count, complete = event.isComplete
+            let missing = event.missingPreFrames, frameIDs = event.frames.map(\.id)
+            diagnostics.eventCreatedOrUpdated(latency: ProcessInfo.processInfo.systemUptime - arrival)
+            debugQueue.async { [weak self] in
+                guard let self, self.sessionGate.shouldDeliver(for: sessionID) else { return }
+                self.onCaptureEvent?(sessionID, eventID, count, complete)
+                if count <= 7 || complete {
+                    print("[CaptureEvent] session=\(sessionID) captureWindow=\(eventID) frames=\(frameIDs) complete=\(complete) missingPre=\(missing)")
+                }
+            }
+        }
+        // Only an immediately selected frame may retain its native camera sample.
+        // All history/event/pending storage owns compact pool buffers instead.
+        scheduleDrain(for: sessionID, nativeFrameID: frame.id, nativeBuffer: pixelBuffer, orientation: orientation)
+        diagnostics.capture(timestamp: timestamp, duration: ProcessInfo.processInfo.systemUptime - arrival,
+                            motionDuration: measurement.duration)
+    }
+    private func scheduleDrain(for sessionID: SessionID, nativeFrameID: UInt64? = nil,
+                               nativeBuffer: CVPixelBuffer? = nil,
+                               orientation: CGImagePropertyOrientation = .up) {
+        guard scheduler.hasFrames, sessionGate.beginInference(for: sessionID) else { return }
+        guard let frame = scheduler.take(generation: sessionID) else { sessionGate.finishInference(); return }
+        let input = frame.id == nativeFrameID ? (nativeBuffer ?? frame.value.pixelBuffer) : frame.value.pixelBuffer
+        let inputOrientation = frame.id == nativeFrameID ? orientation : frame.value.orientation
         processingQueue.async { [weak self] in
             guard let self else { return }
             defer {
                 self.sessionGate.finishInference()
-                // A start before prepare must not reschedule an empty-engine
-                // drain forever. Successful prepare wakes pending captures.
-                if self.engine != nil, let current = self.sessionGate.activeSessionForSampling() {
-                    self.scheduleDrain(for: current)
-                }
+                if self.engine != nil || self.injectedRecognizer != nil,
+                   let current = self.sessionGate.activeSessionForSampling() { self.scheduleDrain(for: current) }
             }
-
-            guard self.sessionGate.shouldDeliver(for: sessionID), let engine = self.engine,
-                  let frame = self.backlog.take(generation: sessionID) else {
-                return
-            }
-
+            guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
             do {
-                let analysisStart = ProcessInfo.processInfo.systemUptime
-                let detections = try autoreleasepool {
-                    try engine.recognize(pixelBuffer: frame.value.pixelBuffer, orientation: frame.value.orientation)
+                let started = ProcessInfo.processInfo.systemUptime
+                let detections: [CardDetection] = try autoreleasepool {
+                    if let recognize = self.injectedRecognizer { return try recognize(input, inputOrientation) }
+                    guard let engine = self.engine else { throw RecognitionError.modelMissing }
+                    return try engine.recognize(pixelBuffer: input, orientation: inputOrientation)
                 }
                 guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
-                self.recordDiagnostics(elapsed: ProcessInfo.processInfo.systemUptime - analysisStart)
-
-                // Use the camera sample's monotonic timestamp rather than the
-                // wall-clock time at which Vision happens to finish.  Model
-                // latency can vary from frame to frame; using Date() here
-                // makes a fast pass look stationary and breaks track timeout
-                // and duplicate cooldown decisions.
-                let captureDate = Date(timeIntervalSinceReferenceDate: frame.timestamp)
-                let update = self.coordinator.processUpdate(detections, at: captureDate)
+                let update = self.timeline.insert(frameID: frame.id, timestamp: frame.timestamp, detections: detections)
                 guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
-
-                // Never draw raw model output. The UI only receives tracks
-                // whose label and geometry have survived confirmation.
+                self.diagnostics.analysis(duration: ProcessInfo.processInfo.systemUptime - started,
+                    resultLatency: ProcessInfo.processInfo.systemUptime - frame.arrivalUptime,
+                    hasResult: !detections.isEmpty, confirmed: !update.records.isEmpty)
                 self.onDetections?(sessionID, update.stableDetections)
-                guard !update.records.isEmpty else { return }
-                self.onRecords?(sessionID, update.records)
+                if !update.decisions.isEmpty {
+                    self.onDecisions?(sessionID, update.decisions)
+                    for decision in update.decisions {
+                        print("[CardEventDecision] session=\(sessionID) event=\(decision.eventID) card=\(decision.record.card.code) duplicateCard=\(decision.duplicateCard) captures=\(decision.captureTimestamps.sorted())")
+                    }
+                }
+                if !update.records.isEmpty { self.onRecords?(sessionID, update.records) }
+                if let summary = self.diagnostics.summaryIfDue() {
+                    let stats = self.scheduler.statistics, pixels = self.snapshotPool.statistics
+                    print("[Phase1] \(summary) history=\(stats.retainedFrames) pendingEvent=\(stats.pendingEventFrames) eventDropped=\(stats.droppedEventFrames) snapshotFailures=\(pixels.failures) pixelBudgetBound=\(pixels.maximumPixelBytes) oldResults=\(self.timeline.rejectedOldResults)")
+                }
             } catch {
                 guard self.sessionGate.failCurrentSession(for: sessionID) else { return }
-                self.backlog.discard(generation: sessionID)
+                self.scheduler.reset(generation: 0)
                 self.onError?(sessionID, error)
             }
         }
     }
-
     private func resetCoordinator(for sessionID: SessionID, clearsDetections: Bool) {
         processingQueue.async { [weak self] in
-            guard let self,
-                  self.sessionGate.shouldResetCoordinator(for: sessionID) else {
-                return
-            }
-
-            self.coordinator.reset()
-            self.diagnosticsStart = ProcessInfo.processInfo.systemUptime
-            self.analyzedFrames = 0
-            self.analysisSeconds = 0
+            guard let self, self.sessionGate.shouldResetCoordinator(for: sessionID) else { return }
+            self.timeline.reset(); self.diagnostics.reset()
             guard self.sessionGate.markCoordinatorReady(for: sessionID) else { return }
             self.scheduleDrain(for: sessionID)
-
-            if clearsDetections, self.sessionGate.shouldDeliver(for: sessionID) {
-                self.onDetections?(sessionID, [])
-            }
+            if clearsDetections { self.onDetections?(sessionID, []) }
         }
     }
-
-    private func recordDiagnostics(elapsed: TimeInterval) {
-        analyzedFrames += 1
-        analysisSeconds += elapsed
-        let now = ProcessInfo.processInfo.systemUptime
-        let window = now - diagnosticsStart
-        guard window >= 2 else { return }
-        let stats = backlog.statistics
-        print("[ScanPipeline] analyzedFPS=\(Double(analyzedFrames) / window) "
-            + "meanAnalysisMs=\(1000 * analysisSeconds / Double(analyzedFrames)) "
-            + "pending=\(stats.pending) retainedBytes=\(stats.bytes) dropped=\(stats.dropped)")
-        diagnosticsStart = now
-        analyzedFrames = 0
-        analysisSeconds = 0
-    }
+    func cameraDroppedFrame() { diagnostics.cameraDropped() }
+    func cameraCallbackCompleted(duration: TimeInterval) { diagnostics.cameraCallback(duration: duration) }
+    // Test barrier only. The camera never waits on the processing queue.
+    func whenReady(_ completion: @escaping () -> Void) { processingQueue.async(execute: completion) }
+    var captureStatistics: EventFrameScheduler<CapturedImage>.Statistics { scheduler.statistics }
 }
