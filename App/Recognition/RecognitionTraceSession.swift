@@ -25,9 +25,12 @@ final class RecognitionTraceSession {
     private var errors: [String] = []
     private var latestCompletedID: String?
     private var latestCompletedText = ""
+    private var latestRunningID: String?
+    private var metadataCost = 0
     // Writer-queue-only state.
     private var attempts: [[String: Any]] = []
     private var artifacts: [String: [String]] = [:]
+    private var artifactStates: [String: [[String: Any]]] = [:]
     private var uiReceipts: [String: [[String: Any]]] = [:]
 
     init(runID: UUID, sessionID: UInt64, configuration: RecognitionTraceConfiguration) {
@@ -53,6 +56,7 @@ final class RecognitionTraceSession {
         }
         recognitionCount += 1
         let metadata = frameMetadata[frameID]
+        let lastCompleted = latestCompletedText
         lock.unlock()
         let trace = RecognitionTrace(frameID: frameID, sessionID: sessionID, runID: runID)
         trace.event("recognitionSelected", [
@@ -64,13 +68,18 @@ final class RecognitionTraceSession {
         trace.overlaySink = { [weak self] name, image, components, uncertain in
             self?.overlay(name, image: image, components: components, uncertain: uncertain, recognitionID: id)
         }
-        onLive?(trace.recognitionID, "Recognition \(trace.recognitionID.prefix(8)) · running\n\(source) \(width)×\(height)")
+        lock.lock(); latestRunningID = trace.recognitionID; lock.unlock()
+        onLive?(trace.recognitionID, "Recognition \(trace.recognitionID.prefix(8)) · running\n\(source) \(width)×\(height)"
+            + (lastCompleted.isEmpty ? "" : "\n最近完成：\n" + lastCompleted))
         return trace
     }
 
     func captureInput(_ buffer: CVPixelBuffer, orientation: CGImagePropertyOrientation, trace: RecognitionTrace) {
         let bytes = RecognitionTracePixels.byteCount(buffer)
-        guard reserve(bytes) else { trace.event("traceIO", ["reason": "TRACE_CAPACITY", "artifact": "recognition_input"]); return }
+        guard reserve(bytes) else {
+            artifactState(trace.recognitionID, "recognition_input", "failed", "TRACE_CAPACITY")
+            trace.event("traceIO", ["reason": "TRACE_CAPACITY", "artifact": "recognition_input"]); return
+        }
         do {
             let packet = try RecognitionTracePixels.capture(buffer, orientation: orientation)
             trace.event("losslessInput", ["pixelFormat": packet.metadata.pixelFormat,
@@ -90,22 +99,31 @@ final class RecognitionTraceSession {
                     try writeJPEG(CIImage(cvPixelBuffer: restored).oriented(orientation),
                                   to: folder.appendingPathComponent("recognition_input.jpg"))
                     artifacts[id, default: []].append("recognition_input.jpg")
-                } catch { failure("INPUT_WRITE_FAILED \(id): \(error)") }
+                    artifactStates[id, default: []].append(["artifact": "recognition_input", "state": "saved",
+                        "losslessMetadataComplete": packet.metadata.metadataComplete])
+                } catch {
+                    artifactStates[id, default: []].append(["artifact": "recognition_input", "state": "failed", "error": String(describing: error)])
+                    failure("INPUT_WRITE_FAILED \(id): \(error)")
+                }
             }
         } catch {
             release(bytes); failure("INPUT_CAPTURE_FAILED \(trace.recognitionID): \(error)")
+            artifactState(trace.recognitionID, "recognition_input", "failed", String(describing: error))
             trace.event("traceIO", ["reason": "INPUT_CAPTURE_FAILED", "error": String(describing: error)])
         }
     }
 
     func image(_ name: String, image: CIImage, recognitionID: String) {
         let extent = image.extent.integral
-        guard !extent.isInfinite, !extent.isEmpty, extent.width <= 8192, extent.height <= 8192,
+        guard !extent.isInfinite, !extent.isEmpty, !extent.isNull,
+              extent.minX.isFinite, extent.minY.isFinite, extent.width.isFinite, extent.height.isFinite,
+              extent.width <= 8192, extent.height <= 8192,
               name == URL(fileURLWithPath: name).lastPathComponent else {
+            artifactState(recognitionID, name, "failed", "INVALID_IMAGE")
             failure("INVALID_IMAGE \(recognitionID)/\(name)"); return
         }
         let width = Int(extent.width), height = Int(extent.height), byteCount = Int(extent.width * extent.height) * 4
-        guard reserve(byteCount) else { return }
+        guard reserve(byteCount) else { artifactState(recognitionID, name, "failed", "TRACE_CAPACITY"); return }
         // Freeze the actual stage pixels now. The writer never retains a lazy source CIImage.
         var pixels = Data(count: byteCount)
         pixels.withUnsafeMutableBytes { pointer in
@@ -126,7 +144,11 @@ final class RecognitionTraceSession {
                 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
                 try writeJPEG(frozen, to: folder.appendingPathComponent(name))
                 artifacts[recognitionID, default: []].append(name)
-            } catch { failure("IMAGE_WRITE_FAILED \(recognitionID)/\(name): \(error)") }
+                artifactStates[recognitionID, default: []].append(["artifact": name, "state": "saved"])
+            } catch {
+                artifactStates[recognitionID, default: []].append(["artifact": name, "state": "failed", "error": String(describing: error)])
+                failure("IMAGE_WRITE_FAILED \(recognitionID)/\(name): \(error)")
+            }
         }
     }
 
@@ -167,14 +189,26 @@ final class RecognitionTraceSession {
         trace.overlaySink = nil
         let snapshot = trace.snapshot()
         let live = RecognitionTracePresentation.text(snapshot)
-        lock.lock(); latestCompletedID = trace.recognitionID; latestCompletedText = live; lock.unlock()
+        lock.lock()
+        latestCompletedID = trace.recognitionID; latestCompletedText = live
+        if latestRunningID == trace.recognitionID { latestRunningID = nil }
+        lock.unlock()
         onLive?(trace.recognitionID, live)
+        // Queue only a bounded snapshot; retain lightweight indexes after writing.
+        // Keeping every full snapshot until session end otherwise scales to gigabytes.
+        let cost = max(4096, trace.estimatedBytes)
+        guard reserveMetadata(cost) else {
+            lock.lock(); omittedRecognitions += 1; lock.unlock()
+            return
+        }
         queue.async { [self] in
-            attempts.append(snapshot)
+            defer { releaseMetadata(cost) }
             do {
                 let folder = recognitionDirectory(trace.recognitionID)
                 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
                 try RecognitionTraceJSON.data(snapshot).write(to: folder.appendingPathComponent("recognition_trace.json"), options: .atomic)
+                attempts.append(["recognitionID": trace.recognitionID, "frameID": String(trace.frameID),
+                    "metadataComplete": trace.truncatedEntries == 0])
             } catch { failure("TRACE_WRITE_FAILED \(trace.recognitionID): \(error)") }
         }
     }
@@ -182,7 +216,7 @@ final class RecognitionTraceSession {
     func recordUI(recognitionID: String, records: [[String: Any]]) {
         queue.async { [self] in uiReceipts[recognitionID, default: []] += records }
         lock.lock()
-        let text = latestCompletedID == recognitionID ? latestCompletedText : nil
+        let text = latestCompletedID == recognitionID && latestRunningID == nil ? latestCompletedText : nil
         lock.unlock()
         if let text { onLive?(recognitionID, text + "\nUI: " + RecognitionTracePresentation.value(records)) }
     }
@@ -196,16 +230,22 @@ final class RecognitionTraceSession {
                 try encoder.encode(summary).write(to: directory.appendingPathComponent("Phase1DebugSummary.json"), options: .atomic)
                 try summary.text.write(to: directory.appendingPathComponent("Phase1DebugSummary.txt"), atomically: true, encoding: .utf8)
                 var index: [[String: Any]] = []
-                for var attempt in attempts {
-                    let id = attempt["recognitionID"] as! String
-                    let frame = UInt64(attempt["frameID"] as! String)!
+                for retained in attempts {
+                    guard let id = retained["recognitionID"] as? String,
+                          let frameText = retained["frameID"] as? String, let frame = UInt64(frameText) else { continue }
+                    let traceURL = recognitionDirectory(id).appendingPathComponent("recognition_trace.json")
+                    guard var attempt = try JSONSerialization.jsonObject(with: Data(contentsOf: traceURL)) as? [String: Any] else {
+                        throw RecognitionTraceIOError.corruptArchive
+                    }
                     let windows = summary.events.filter { $0.frameIDs.contains(frame) }
                     attempt["captureWindowIDs"] = windows.map { String($0.eventID) }
                     attempt["artifacts"] = artifacts[id] ?? []
+                    attempt["artifactStates"] = artifactStates[id] ?? []
                     attempt["uiReceipts"] = uiReceipts[id] ?? []
                     let names = artifacts[id] ?? []
                     attempt["inputSaved"] = names.contains("recognition_input.json")
                     attempt["testLabel"] = configuration.testLabel
+                    attempt["inputState"] = names.contains("recognition_input.json") ? "saved" : "notSaved"
                     let folder = recognitionDirectory(id)
                     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
                     try RecognitionTraceJSON.data(attempt).write(to: folder.appendingPathComponent("recognition_trace.json"), options: .atomic)
@@ -234,6 +274,7 @@ final class RecognitionTraceSession {
                     "droppedFrameMetadata": dropped, "phase1MetadataComplete": summary.metadataComplete,
                     "build": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown",
                     "sourceRevision": Bundle.main.infoDictionary?["TraceSourceRevision"] as? String ?? "unknown",
+                    "modelSHA256": Bundle.main.infoDictionary?["TraceModelSHA256"] as? String ?? "unknown",
                     "systemVersion": ProcessInfo.processInfo.operatingSystemVersionString,
                     "device": UIDevice.current.model,
                     "snapshotMaximumDimension": summary.snapshotMaximumDimension,
@@ -241,8 +282,10 @@ final class RecognitionTraceSession {
                     "sessionByteLimit": configuration.maximumSessionBytes,
                     "reason": summary.reason, "finishedAt": ISO8601DateFormatter().string(from: Date())]
                 try RecognitionTraceJSON.data(manifest).write(to: directory.appendingPathComponent("session_manifest.json"), options: .atomic)
-                try RecognitionTraceComparison.update(in: configuration.directory)
                 onExport?(directory, complete)
+                // A comparison failure cannot invalidate an already exported Session.
+                do { try RecognitionTraceComparison.update(in: configuration.directory) }
+                catch { onLive?("", "Session 已保存，A/B 报告生成失败：\(error)") }
             } catch {
                 failure("SESSION_EXPORT_FAILED: \(error)")
                 onLive?("", "Trace 导出失败：\(error)")
@@ -256,6 +299,11 @@ final class RecognitionTraceSession {
     private func recognitionDirectory(_ id: String) -> URL {
         directory.appendingPathComponent("Recognition-\(id)", isDirectory: true)
     }
+    private func artifactState(_ id: String, _ artifact: String, _ state: String, _ reason: String) {
+        queue.async { [self] in
+            artifactStates[id, default: []].append(["artifact": artifact, "state": state, "reason": reason])
+        }
+    }
     private func reserve(_ count: Int) -> Bool {
         lock.lock(); defer { lock.unlock() }
         guard count > 0, count <= configuration.maximumQueuedBytes - queuedBytes,
@@ -265,6 +313,15 @@ final class RecognitionTraceSession {
         }
         queuedBytes += count; reservedSessionBytes += count; return true
     }
+    private func reserveMetadata(_ count: Int) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard count > 0, count <= 32 * 1024 * 1024 - metadataCost else {
+            if errors.count < 100 { errors.append("TRACE_METADATA_QUEUE_CAPACITY requested=\(count)") }
+            return false
+        }
+        metadataCost += count; return true
+    }
+    private func releaseMetadata(_ count: Int) { lock.lock(); metadataCost -= count; lock.unlock() }
     private func release(_ count: Int) { lock.lock(); queuedBytes -= count; lock.unlock() }
     private func failure(_ message: String) {
         lock.lock(); if errors.count < 100 { errors.append(message) }; lock.unlock()

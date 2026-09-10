@@ -40,6 +40,22 @@ final class RecognitionExtractorTraceTests: XCTestCase {
         XCTAssertNotNil(failure["candidateID"] as? Int)
         XCTAssertEqual(failure["featureProduced"] as? Bool, false)
         XCTAssertEqual(failure["suitState"] as? String, "notRun")
+        let candidateID = try XCTUnwrap(failure["candidateID"] as? Int)
+        let summary = try XCTUnwrap(trace.entries.first {
+            $0["stage"] as? String == "pipSummary" && $0["state"] as? String == "candidateRejected"
+                && $0["candidateID"] as? Int == candidateID
+        })
+        XCTAssertEqual(summary["retainedCount"] as? Int, 0)
+        XCTAssertEqual(summary["componentState"] as? String, "completed")
+        let detectedCount = trace.entries.filter {
+            $0["stage"] as? String == "componentDetected" && $0["purpose"] as? String == "pip"
+                && $0["candidateID"] as? Int == candidateID
+        }.count
+        XCTAssertEqual(summary["detectedCount"] as? Int, detectedCount)
+        XCTAssertTrue(summary["bodyPipCount"] is NSNull)
+        XCTAssertTrue(summary["estimatorInput"] is NSNull)
+        XCTAssertEqual(summary["bodyFilterState"] as? String, "notRun")
+        XCTAssertEqual(summary["estimatorState"] as? String, "notRun")
         XCTAssertTrue(trace.entries.contains { $0["reason"] as? String == "OCR_NIL" })
         XCTAssertTrue(JSONSerialization.isValidJSONObject(trace.snapshot()))
     }
@@ -66,6 +82,8 @@ final class RecognitionExtractorTraceTests: XCTestCase {
         let summary = try XCTUnwrap(entries.first {
             $0["stage"] as? String == "pipSummary" && $0["state"] as? String == "completed"
         })
+        XCTAssertEqual(summary["detectedCount"] as? Int, detected.count)
+        XCTAssertEqual(summary["componentState"] as? String, "completed")
         XCTAssertEqual(summary["estimatorInput"] as? [[String: Double]], RecognitionTrace.points(feature.pipCenters))
         XCTAssertTrue(entries.contains { $0["stage"] as? String == "componentShape" && $0["shapeScores"] != nil })
         XCTAssertTrue(entries.contains {
@@ -90,6 +108,51 @@ final class RecognitionExtractorTraceTests: XCTestCase {
         XCTAssertGreaterThan(trace.truncatedEntries, 0)
     }
 
+    func testRectificationReferencesTheActualWorkingImageAndObservedCorners() throws {
+        let trace = RecognitionTrace()
+        var savedImages: [String: CIImage] = [:]
+        trace.imageSink = { savedImages[$0] = $1 }
+        _ = try RecognitionTrace.withCurrent(trace) {
+            try PartialCardFeatureExtractor().extract(image: fixture(drawPips: true))
+        }
+        let inputs = trace.entries.filter {
+            $0["stage"] as? String == "candidate" && $0["state"] as? String == "rectificationInput"
+        }
+        XCTAssertFalse(inputs.isEmpty)
+        for input in inputs {
+            let imageName = try XCTUnwrap(input["preRectificationImage"] as? String)
+            let image = try XCTUnwrap(savedImages[imageName])
+            XCTAssertEqual(input["preRectificationExtent"] as? [String: Double], RecognitionTrace.rect(image.extent))
+            XCTAssertEqual(input["preRectificationImageState"] as? String, "observed")
+            for corner in ["topLeft", "topRight", "bottomLeft", "bottomRight"] {
+                let point = try XCTUnwrap(input[corner] as? [String: Double])
+                XCTAssertTrue((0...1).contains(try XCTUnwrap(point["x"])))
+                XCTAssertTrue((0...1).contains(try XCTUnwrap(point["y"])))
+            }
+        }
+    }
+
+    func testIneligibleInkPreservesFeaturesAndReportsNoInventedSuitMargin() throws {
+        // L-shaped ink passes geometric component collection, while supplying
+        // no full-suit template evidence. This exercises the real image path.
+        let image = fixture(drawPips: true, unqualifiedInk: true)
+        let off = try RecognitionCallProbe.measure {
+            try PartialCardFeatureExtractor().extract(image: image)
+        }
+        let trace = RecognitionTrace()
+        let on = try RecognitionCallProbe.measure {
+            try RecognitionTrace.withCurrent(trace) { try PartialCardFeatureExtractor().extract(image: image) }
+        }
+        XCTAssertEqual(try featureData(off.0), try featureData(on.0))
+        XCTAssertEqual(off.1, on.1)
+        let fallback = try XCTUnwrap(trace.entries.first { $0["state"] as? String == "noEligiblePips" })
+        XCTAssertEqual(fallback["probabilitiesState"] as? String, "uniformFallback")
+        XCTAssertEqual(fallback["probabilities"] as? [String: Double],
+            ["club": 0.25, "spade": 0.25, "heart": 0.25, "diamond": 0.25])
+        XCTAssertTrue(fallback["margin"] is NSNull)
+        XCTAssertEqual(fallback["marginState"] as? String, "notEvaluated")
+    }
+
     func testInvalidImageTraceUsesNullInsteadOfNonFiniteGeometry() throws {
         let trace = RecognitionTrace()
         let features = try RecognitionTrace.withCurrent(trace) {
@@ -100,6 +163,57 @@ final class RecognitionExtractorTraceTests: XCTestCase {
         XCTAssertTrue(JSONSerialization.isValidJSONObject(trace.snapshot()))
         XCTAssertNil(trace.callCounts["ocr"])
         XCTAssertNil(trace.callCounts["classify"])
+    }
+
+    func testWhiteLevelGuardLeavesComponentsAndEstimatorExplicitlyNotRun() throws {
+        let trace = RecognitionTrace()
+        _ = try RecognitionTrace.withCurrent(trace) {
+            try PartialCardFeatureExtractor().extract(image: fixture(drawPips: false, darkInterior: true))
+        }
+        let rejected = try XCTUnwrap(trace.entries.first { $0["reason"] as? String == "PIP_WHITE_LEVEL" })
+        let candidateID = try XCTUnwrap(rejected["candidateID"] as? Int)
+        XCTAssertTrue(rejected["detectedCount"] is NSNull)
+        XCTAssertEqual(rejected["componentState"] as? String, "notRun")
+        XCTAssertFalse(trace.entries.contains {
+            $0["stage"] as? String == "componentDetected" && $0["purpose"] as? String == "pip"
+                && $0["candidateID"] as? Int == candidateID
+        })
+        if let summary = trace.entries.first(where: {
+            $0["stage"] as? String == "pipSummary" && $0["state"] as? String == "candidateRejected"
+                && $0["candidateID"] as? Int == candidateID
+        }) {
+            XCTAssertTrue(summary["detectedCount"] is NSNull)
+            XCTAssertEqual(summary["componentState"] as? String, "notRun")
+            XCTAssertEqual(summary["retainedCount"] as? Int, 0)
+            XCTAssertTrue(summary["estimatorInput"] is NSNull)
+        }
+    }
+
+    func testSurfaceComponentCapRecordsSkippedIDsWithoutChangingFeaturesOrCalls() throws {
+        let canvas = CGContext(data: nil, width: 320, height: 380, bitsPerComponent: 8,
+            bytesPerRow: 320 * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        canvas.setFillColor(CGColor(gray: 0.05, alpha: 1))
+        canvas.fill(CGRect(x: 0, y: 0, width: 320, height: 380))
+        canvas.setFillColor(CGColor(gray: 0.98, alpha: 1))
+        for index in 0..<8 {
+            canvas.fill(CGRect(x: 20 + (index % 3) * 96, y: 20 + (index / 3) * 116, width: 60, height: 84))
+        }
+        let image = CIImage(cgImage: canvas.makeImage()!)
+        let off = try RecognitionCallProbe.measure { try PartialCardFeatureExtractor().extract(image: image) }
+        let trace = RecognitionTrace()
+        let on = try RecognitionCallProbe.measure {
+            try RecognitionTrace.withCurrent(trace) { try PartialCardFeatureExtractor().extract(image: image) }
+        }
+        XCTAssertEqual(try featureData(off.0), try featureData(on.0))
+        XCTAssertEqual(off.1, on.1)
+        let capped = trace.entries.filter { $0["reason"] as? String == "SURFACE_COMPONENT_CAP" }
+        XCTAssertEqual(capped.count, 2)
+        let detectedIDs = Set(trace.entries.filter {
+            $0["stage"] as? String == "componentDetected" && $0["purpose"] as? String == "surface"
+        }.compactMap { $0["componentID"] as? Int })
+        XCTAssertTrue(capped.allSatisfy { detectedIDs.contains($0["componentID"] as? Int ?? -1) })
+        XCTAssertTrue(capped.allSatisfy { $0["candidateState"] as? String == "notEvaluated" })
     }
 
     private func featureData(_ values: [PartialCardFeatures]) throws -> Data {
@@ -117,7 +231,8 @@ final class RecognitionExtractorTraceTests: XCTestCase {
         return try JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
     }
 
-    private func fixture(drawPips: Bool, tinyInk: Bool = false) -> CIImage {
+    private func fixture(drawPips: Bool, tinyInk: Bool = false, unqualifiedInk: Bool = false,
+                         darkInterior: Bool = false) -> CIImage {
         let canvas = CGContext(data: nil, width: 320, height: 380, bitsPerComponent: 8,
             bytesPerRow: 320 * 4, space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -126,11 +241,20 @@ final class RecognitionExtractorTraceTests: XCTestCase {
         let card = CGRect(x: 60, y: 54, width: 180, height: 252)
         canvas.setFillColor(CGColor(gray: 0.98, alpha: 1))
         canvas.fill(card)
+        if darkInterior {
+            canvas.setFillColor(CGColor(gray: 0.20, alpha: 1))
+            canvas.fill(card.insetBy(dx: 6, dy: 6))
+        }
         if drawPips {
             let points = [(0.3, 0.18), (0.7, 0.18), (0.5, 0.5), (0.3, 0.82), (0.7, 0.82)]
             canvas.setFillColor(CGColor(red: 0.85, green: 0.02, blue: 0.02, alpha: 1))
             for point in points {
                 let center = CGPoint(x: card.minX + point.0 * card.width, y: card.minY + point.1 * card.height)
+                if unqualifiedInk {
+                    canvas.fill(CGRect(x: center.x - 10, y: center.y - 13, width: 4, height: 26))
+                    canvas.fill(CGRect(x: center.x - 10, y: center.y - 13, width: 20, height: 4))
+                    continue
+                }
                 canvas.beginPath()
                 canvas.move(to: CGPoint(x: center.x, y: center.y - 13))
                 canvas.addLine(to: CGPoint(x: center.x + 10, y: center.y))

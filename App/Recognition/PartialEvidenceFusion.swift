@@ -141,7 +141,9 @@ enum PartialEvidenceFusion {
         }
         trace?.candidateID = nil
         trace?.event("fusion.result", ["status": "completed", "finalDetections": RecognitionTrace.detections(result),
-            "usableLocalCount": usableLocal.count, "usableModelCount": usableModel.count])
+            "usableLocalCount": usableLocal.count, "usableModelCount": usableModel.count,
+            "fusedDetectionCount": fused.count,
+            "reason": result.isEmpty ? "NO_FINAL_DETECTION" : (fused.isEmpty ? "MODEL_ONLY_RESULT" : "FUSION_ACCEPTED")])
         return result
     }
 

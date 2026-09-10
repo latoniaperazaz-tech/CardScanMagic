@@ -141,6 +141,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          candidates = sorted(Path('App').rglob('CardDetector.mlpackage')) + sorted(Path('App').rglob('CardDetector.mlmodel'))
+          if len(candidates) != 1:
+              raise SystemExit('Expected exactly one bundled model for trace identity')
+          package = candidates[0]
+          digest = hashlib.sha256()
+          for item in (sorted(package.rglob('*')) if package.is_dir() else [package]):
+              if item.is_file():
+                  digest.update((item.relative_to(package).as_posix() if package.is_dir() else item.name).encode())
+                  digest.update(b'\0')
+                  digest.update(item.read_bytes())
+          if not package.exists():
+              raise SystemExit('Cannot locate bundled model for trace identity')
+          project = Path('project.yml')
+          project.write_text(project.read_text().replace('    SWIFT_VERSION: "5.0"',
+              '    SWIFT_VERSION: "5.0"\n    INFOPLIST_KEY_TraceModelSHA256: "' + digest.hexdigest() + '"'))
+          PY
           if ! command -v xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
@@ -154,6 +173,7 @@ jobs:
             -project CardScanMagic.xcodeproj \
             -scheme CardScanMagic \
             -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -resultBundlePath build/TraceTests.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
@@ -173,6 +193,14 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build
 
+          if [[ '${{ inputs.recognition_trace }}' == 'true' ]]; then
+            xcodebuild -project CardScanMagic.xcodeproj -scheme CardScanMagic \
+              -configuration Release -sdk iphoneos \
+              -derivedDataPath "$PWD/build/NormalDerivedData" \
+              SWIFT_ACTIVE_COMPILATION_CONDITIONS="" \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          fi
+
           app_path="$PWD/build/DerivedData/Build/Products/Release-iphoneos/CardScanMagic.app"
           test -d "$app_path"
           mkdir -p build/Payload
@@ -185,4 +213,13 @@ jobs:
           name: CardScanMagic-unsigned-ipa
           path: build/CardScanMagic-unsigned.ipa
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Swift-test-results
+          path: build/TraceTests.xcresult
+          if-no-files-found: ignore
           retention-days: 14

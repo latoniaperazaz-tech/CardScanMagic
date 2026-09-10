@@ -72,6 +72,8 @@ final class PartialCardFeatureExtractor {
     private static let references = makeReferences()
     private static let unitRect = CGRect(x: 0, y: 0, width: 1, height: 1)
     private var nextTraceComponentID = 0
+    /// nil distinguishes a skipped component pass from an executed empty pass.
+    private var tracePipComponentCount: Int?
 
     private func traceCandidate() -> Int? {
         RecognitionTrace.current?.beginCandidate(["state": "proposed"])
@@ -83,6 +85,10 @@ final class PartialCardFeatureExtractor {
         var values = fields()
         values["componentID"] = component.traceID as Any? ?? NSNull()
         values["purpose"] = component.tracePurpose
+        if stage == "componentFiltered" {
+            values["state"] = values["state"] ?? "filtered"
+            values["estimatorInput"] = false
+        }
         trace.event(stage, values)
     }
 
@@ -170,6 +176,14 @@ final class PartialCardFeatureExtractor {
             func vector(_ point: CGPoint) -> CIVector {
                 CIVector(x: point.x * size.width, y: point.y * size.height)
             }
+            trace?.event("candidate", ["state": "rectificationInput",
+                "preRectificationImage": "roi.jpg", "preRectificationImageState": "observed",
+                "preRectificationExtent": RecognitionTrace.rect(bounded.extent),
+                "cornerCoordinateSpace": "normalized_working_image_y_up",
+                "topLeft": RecognitionTrace.points([rectangle.topLeft])[0],
+                "topRight": RecognitionTrace.points([rectangle.topRight])[0],
+                "bottomLeft": RecognitionTrace.points([rectangle.bottomLeft])[0],
+                "bottomRight": RecognitionTrace.points([rectangle.bottomRight])[0]])
             var corrected = bounded.applyingFilter("CIPerspectiveCorrection", parameters: [
                 "inputTopLeft": vector(rectangle.topLeft),
                 "inputTopRight": vector(rectangle.topRight),
@@ -272,6 +286,13 @@ final class PartialCardFeatureExtractor {
             }
             let rank = try recognizeRank(in: candidate.image)
             guard !pips.isEmpty || rank.text != nil else {
+                trace?.event("pipSummary", ["state": "candidateRejected", "reason": "NO_PIPS_AND_OCR_NIL",
+                    "componentState": tracePipComponentCount == nil ? "notRun" : "completed",
+                    "detectedCount": tracePipComponentCount as Any? ?? NSNull(), "retainedCount": pips.count,
+                    "bodyPipCount": NSNull(), "bodyFilterState": "notRun",
+                    "estimatorInput": NSNull(), "estimatorComponentIDs": NSNull(), "estimatorState": "notRun",
+                    "clippedPipCandidates": NSNull(), "clippedCollectionState": "notRun",
+                    "uncertainRegions": uncertainRegions.map(RecognitionTrace.rect), "visibleRegion": candidate.region])
                 trace?.event("candidate", ["state": "rejected", "reason": "NO_PIPS_AND_OCR_NIL",
                     "pipCount": pips.count, "suitState": "notRun", "featureProduced": false,
                     "uncertainRegions": uncertainRegions.map(RecognitionTrace.rect)])
@@ -321,6 +342,8 @@ final class PartialCardFeatureExtractor {
                 traceCandidateID: candidate.traceID
             ))
             trace?.event("pipSummary", ["state": "completed", "retainedCount": pips.count,
+                "componentState": tracePipComponentCount == nil ? "notRun" : "completed",
+                "detectedCount": tracePipComponentCount as Any? ?? NSNull(), "bodyFilterState": "completed",
                 "bodyPipCount": bodyPips.count, "bodySuitSupportingPips": supporting,
                 "pipStructureConfidence": structure, "imageAspectRatio": aspectRatio,
                 "estimatorInput": RecognitionTrace.points(bodyPips.map(\.center)),
@@ -433,7 +456,7 @@ final class PartialCardFeatureExtractor {
         }
         RecognitionTrace.current?.event("surface", ["state": "mask", "brightnessFloor": floor,
             "width": raster.width, "height": raster.height])
-        return components(mask, width: raster.width, height: raster.height, purpose: "surface", raster: raster)
+        let plausible = components(mask, width: raster.width, height: raster.height, purpose: "surface", raster: raster)
             .filter { component in
                 let retained = component.pixels.count >= max(120, count / 75)
                 if !retained {
@@ -442,7 +465,13 @@ final class PartialCardFeatureExtractor {
                 return retained
             }
             .sorted { $0.pixels.count > $1.pixels.count }
-            .prefix(6)
+        if RecognitionTrace.current != nil {
+            for component in plausible.dropFirst(6) {
+                traceComponent(component, stage: "surface", fields: ["state": "rejected",
+                    "reason": "SURFACE_COMPONENT_CAP", "candidateState": "notEvaluated"])
+            }
+        }
+        return plausible.prefix(6)
             .compactMap { component in
                 let box = component.bounds
                 guard box.width >= 16, box.height >= 16 else {
@@ -479,6 +508,7 @@ final class PartialCardFeatureExtractor {
 
     private func extractPips(_ raster: Raster) -> [Pip] {
         let trace = RecognitionTrace.current
+        tracePipComponentCount = nil
         let count = raster.width * raster.height
         var histogram = [Int](repeating: 0, count: 256)
         for index in 0..<count {
@@ -495,8 +525,10 @@ final class PartialCardFeatureExtractor {
             return []
         }
         let darkThreshold = min(165, max(38, whiteLevel - 42))
+        if trace != nil { tracePipComponentCount = 0 }
         trace?.event("pipSummary", ["state": "mask", "whiteLevel": whiteLevel,
-            "darkThreshold": darkThreshold, "width": raster.width, "height": raster.height])
+            "darkThreshold": darkThreshold, "width": raster.width, "height": raster.height,
+            "componentState": "notRun", "detectedCount": NSNull(), "retainedCount": NSNull()])
         var redMask = [UInt8](repeating: 0, count: count)
         var darkMask = redMask
         for index in 0..<count {
@@ -577,6 +609,7 @@ final class PartialCardFeatureExtractor {
             }
         }
         trace?.event("pipSummary", ["state": "extracted", "geometricCount": pips.count,
+            "componentState": "completed", "detectedCount": tracePipComponentCount as Any? ?? NSNull(),
             "retainedCount": min(18, sortedPips.count)])
         return Array(sortedPips.prefix(18)).sorted {
             $0.center.y == $1.center.y ? $0.center.x < $1.center.x : $0.center.y < $1.center.y
@@ -709,7 +742,8 @@ final class PartialCardFeatureExtractor {
             RecognitionTrace.current?.event("suit", ["state": "noEligiblePips", "reason": "NO_SUIT_ELIGIBLE_PIP",
                 "inputComponentIDs": pips.map { $0.traceID as Any? ?? NSNull() },
                 "eligibleComponentIDs": [], "probabilities": Dictionary(uniqueKeysWithValues: Self.suits.map { ($0, 0.25) }),
-                "confidence": 0.0, "top1": NSNull(), "top2": NSNull(), "margin": 0.0,
+                "probabilitiesState": "uniformFallback", "confidence": 0.0,
+                "top1": NSNull(), "top2": NSNull(), "margin": NSNull(), "marginState": "notEvaluated",
                 "finalSuit": NSNull(), "finalSuitState": "notEvaluated"])
             return (Dictionary(uniqueKeysWithValues: Self.suits.map { ($0, 0.25) }), 0)
         }
@@ -870,6 +904,7 @@ final class PartialCardFeatureExtractor {
             let traceID: Int?
             if let trace = trace {
                 nextTraceComponentID += 1
+                if purpose == "pip" { tracePipComponentCount = (tracePipComponentCount ?? 0) + 1 }
                 traceID = nextTraceComponentID
                 let bounds = CGRect(x: CGFloat(minX), y: CGFloat(minY),
                     width: CGFloat(maxX - minX + 1), height: CGFloat(maxY - minY + 1))

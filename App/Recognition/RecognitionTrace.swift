@@ -16,15 +16,19 @@ final class RecognitionTrace {
     private(set) var entries: [[String: Any]] = []
     private(set) var callCounts: [String: Int] = [:]
     private(set) var truncatedEntries = 0
+    private(set) var estimatedBytes = 0
     private var nextCandidateID = 0
     let maximumEntries: Int
+    let maximumBytes: Int
     var imageSink: ((String, CIImage) -> Void)?
     var overlaySink: ((String, CIImage, [[String: Any]], [CGRect]) -> Void)?
 
     init(recognitionID: String = UUID().uuidString, frameID: UInt64 = 0,
-         sessionID: UInt64 = 0, runID: String = UUID().uuidString, maximumEntries: Int = 12000) {
+         sessionID: UInt64 = 0, runID: String = UUID().uuidString, maximumEntries: Int = 12000,
+         maximumBytes: Int = 8 * 1024 * 1024) {
         self.recognitionID = recognitionID; self.frameID = frameID
         self.sessionID = sessionID; self.runID = runID; self.maximumEntries = maximumEntries
+        self.maximumBytes = maximumBytes
     }
 
     static func withCurrent<T>(_ trace: RecognitionTrace?, _ body: () throws -> T) rethrows -> T {
@@ -51,6 +55,10 @@ final class RecognitionTrace {
         if let candidateID { entry["candidateID"] = candidateID }
         if let componentID { entry["componentID"] = componentID }
         fields.forEach { entry[$0.key] = $0.value }
+        if let code = Self.reasonCode(stage, entry) { entry["reasonCode"] = code }
+        let cost = Self.storageCost(entry)
+        guard cost <= maximumBytes - estimatedBytes else { truncatedEntries += 1; return }
+        estimatedBytes += cost
         entries.append(entry)
     }
 
@@ -67,10 +75,46 @@ final class RecognitionTrace {
     }
 
     func snapshot() -> [String: Any] {
-        ["schemaVersion": 1, "runID": runID, "sessionID": String(sessionID),
+        let value: [String: Any] = ["schemaVersion": 1, "runID": runID, "sessionID": String(sessionID),
          "frameID": String(frameID), "recognitionID": recognitionID,
          "candidateProposalCount": nextCandidateID, "entries": entries, "callCounts": callCounts,
-         "truncatedEntries": truncatedEntries, "metadataComplete": truncatedEntries == 0]
+         "truncatedEntries": truncatedEntries, "metadataComplete": truncatedEntries == 0,
+         "estimatedMetadataBytes": estimatedBytes, "metadataByteLimit": maximumBytes]
+        return RecognitionTraceJSON.safe(value) as? [String: Any] ?? [:]
+    }
+
+    /// Conservative recursive accounting bounds nested arrays as well as entry count.
+    /// Diagnostic allocation units, not a claim about resident memory measurements.
+    static func storageCost(_ value: Any) -> Int {
+        if let map = value as? [String: Any] {
+            return 128 + map.reduce(0) { $0 + 128 + $1.key.utf8.count * 6 + storageCost($1.value) }
+        }
+        if let list = value as? [Any] { return 64 + list.reduce(0) { $0 + 32 + storageCost($1) } }
+        if let string = value as? String { return 64 + string.utf8.count * 6 }
+        return 64
+    }
+
+    /// Categories only: preserve the detailed branch reason and never affect its result.
+    private static func reasonCode(_ stage: String, _ fields: [String: Any]) -> String? {
+        if stage == "engine.final", let output = fields["finalDetections"] as? [Any], output.isEmpty { return "NO_FINAL_DETECTION" }
+        if stage == "fusion.conflict", fields["vetoed"] as? Bool == true {
+            return fields["rankConflict"] as? Bool == true ? "OCR_CONFLICT" : "RANK_SUIT_CONFLICT"
+        }
+        guard fields["passed"] as? Bool != true, let reason = fields["reason"] as? String else { return nil }
+        switch reason {
+        case "LOCALIZATION_CONFIDENCE_LOW": return "LOW_LOCALIZATION"
+        case "NO_SUIT_ELIGIBLE_PIP": return "SUIT_NOT_FOUND"
+        case "SUIT_MARGIN_LOW", "SUIT_CONFIDENCE_LOW", "FUSION_SUIT_UNRESOLVED": return "SUIT_AMBIGUOUS"
+        case "NO_VALID_ESTIMATOR_PIPS", "PIP_INPUT_EMPTY", "PIP_ABSOLUTE_SUPPORT_INSUFFICIENT",
+             "PIP_VISIBLE_SUPPORT_INSUFFICIENT", "PIP_PARTIAL_COUNT_LOW": return "INSUFFICIENT_PIP_CENTERS"
+        case "PIP_LAYOUT_SCORE_LOW", "PIP_LAYOUT_CONFIDENCE_LOW", "FUSION_LAYOUT_CONFIDENCE_LOW": return "PIP_LAYOUT_LOW_SCORE"
+        case "PIP_LAYOUT_MARGIN_LOW", "PIP_OCCLUSION_AMBIGUOUS", "PIP_LAYOUT_RANK_UNRESOLVED",
+             "FUSION_RANK_UNRESOLVED": return "PIP_LAYOUT_AMBIGUOUS"
+        case "FUSION_NO_QUALIFIED_RANK_SUPPORT", "FUSION_CONFLICT_VETO": return "FUSION_REJECTED"
+        default:
+            if stage == "componentFiltered", fields["purpose"] as? String == "pip" { return "PIP_COMPONENTS_FILTERED" }
+            return reason
+        }
     }
 
     static func rect(_ value: CGRect) -> [String: Double] {

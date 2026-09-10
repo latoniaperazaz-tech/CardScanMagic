@@ -29,10 +29,18 @@ struct RecognitionLiveTraceView: View {
                             .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
                     }.frame(maxHeight: 170)
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text("更新于 \(Int(max(0, context.date.timeIntervalSince(updatedAt)))) 秒前")
-                            .font(.caption2)
+                        let age = max(0, context.date.timeIntervalSince(updatedAt))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("最近 Trace 更新：\(Int(age)) 秒前").font(.caption2)
+                            if scanning && age >= 2 {
+                                Text("等待下一次更新；以上是此前的 Trace，不代表当前镜头画面")
+                                    .font(.caption2).foregroundStyle(.yellow)
+                            }
+                        }
                     }
-                    if !exportText.isEmpty { Text(exportText).font(.caption2).lineLimit(2) }
+                    Text("notRun / null 表示该值未被观察；OCR_NIL 本身不是整帧拒绝原因")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    if !exportText.isEmpty { Text(exportText).font(.caption2).textSelection(.enabled) }
                 }
             }
         }
@@ -40,4 +48,3 @@ struct RecognitionLiveTraceView: View {
         .foregroundStyle(.white).padding(.horizontal, 16)
     }
 }
-
