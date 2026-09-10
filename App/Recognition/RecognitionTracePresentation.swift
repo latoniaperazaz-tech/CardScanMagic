@@ -196,8 +196,26 @@ enum RecognitionTracePresentation {
         ]
         var result: [String: Any] = [:]
         for (key, stages) in groups {
-            result[key] = semanticValue(all.filter { stages.contains($0["stage"] as? String ?? "") })
+            result[key] = semanticValue(all.filter {
+                stages.contains($0["stage"] as? String ?? "") && (key != "pip" || $0["purpose"] as? String != "surface")
+            })
         }
+        // Feature count is computed after Pip/OCR. Putting it in the candidate
+        // stage would falsely blame localization for every later Pip failure.
+        // Preserve it in the report, while comparing stage inputs chronologically.
+        var candidateProjection: [[String: Any]] = all.filter { entry in
+            guard entry["stage"] as? String == "extractor" else { return false }
+            return ["started", "workingImage", "rejected", "error"].contains(entry["state"] as? String ?? "")
+        }
+        if let count = all.last(where: { $0["stage"] as? String == "extractor" && $0["candidateCount"] != nil }) {
+            candidateProjection.append(["stage": "candidateInventory", "candidateCount": count["candidateCount"] ?? NSNull()])
+        }
+        candidateProjection += all.filter { entry in
+            guard entry["stage"] as? String == "candidate" else { return false }
+            let state = entry["state"] as? String ?? ""
+            return state != "completed" && entry["reason"] as? String != "NO_PIPS_AND_OCR_NIL"
+        }
+        result["candidate"] = semanticValue(candidateProjection)
         result["coordinator"] = semanticValue(coordinatorOutcome(trace))
         result["ui"] = semanticValue(trace["uiReceipts"] ?? NSNull())
         return result
@@ -207,7 +225,7 @@ enum RecognitionTracePresentation {
         "uptime", "timestamp", "evidenceTimestamp", "lastTimestamp", "checkpointTimestamp", "lastSeen",
         "captureTimestamps", "proposalTimestamp", "observationTimestamps", "selectedUptime", "startUptime", "completedUptime",
         "processingRecognitionID", "evidenceRecognitionID", "replayPassID", "traceTrackID", "temporaryTrackID",
-        "publishedTrackID", "selectedTrackID", "recentTrackID", "trackID", "recognitionID", "candidateID",
+        "publishedTrackID", "selectedTrackID", "recentTrackID", "trackID", "recognitionID", "recordID", "candidateID",
         "componentID", "estimatorComponentIDs", "inputComponentIDs", "sourceComponentID", "frameID", "evidenceFrameID",
         "runID", "sessionID", "testLabel", "captureWindowIDs", "preRectificationImage"
     ]

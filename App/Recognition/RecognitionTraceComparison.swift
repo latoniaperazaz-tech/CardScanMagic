@@ -155,9 +155,11 @@ enum RecognitionTraceComparison {
     static func bestPair(_ a: [[String: Any]], _ b: [[String: Any]]) -> (Int, Int, Double)? {
         var best: (Int, Int, Double)?
         for (ai, left) in a.enumerated() {
+            guard left["metadataComplete"] as? Bool == true else { continue }
             let ca = RecognitionTracePresentation.processedCandidates(left)
             guard ca.count == 1, let ra = box(ca[0]["boundingBox"]) else { continue }
             for (bi, right) in b.enumerated() {
+                guard right["metadataComplete"] as? Bool == true else { continue }
                 let cb = RecognitionTracePresentation.processedCandidates(right)
                 guard cb.count == 1, let rb = box(cb[0]["boundingBox"]), sameInput(left, right) else { continue }
                 let intersection = ra.intersection(rb)

@@ -37,6 +37,20 @@ final class RecognitionTraceComparisonTests: XCTestCase {
         XCTAssertEqual(RecognitionTracePresentation.outcome(covered)["reason"] as? String, "NO_PARTIAL_CANDIDATE")
     }
 
+    func testFeatureLossAfterPipFailureDoesNotFalselyBlameCandidateLocalization() throws {
+        let full = observation()
+        var covered = observation(id: "covered")
+        var entries = RecognitionTracePresentation.entries(covered)
+        let extractor = entries.firstIndex { $0["stage"] as? String == "extractor" }!
+        entries[extractor]["featureCount"] = 0
+        entries.removeAll { ["componentDetected", "pipSummary", "rank.input", "rank.normalized", "rank.candidate", "rank.result", "suit", "fusion.resolveInput", "fusion.candidate"]
+            .contains($0["stage"] as? String ?? "") }
+        entries += [["stage": "pipSummary", "candidateID": 1, "state": "rejected", "reason": "PIP_WHITE_LEVEL", "detectedCount": NSNull()],
+                    ["stage": "candidate", "candidateID": 1, "state": "rejected", "reason": "NO_PIPS_AND_OCR_NIL", "featureProduced": false]]
+        covered["entries"] = entries
+        XCTAssertEqual(try RecognitionTracePresentation.firstDifference(full, covered), "pip")
+    }
+
     func testMultipleCandidatesAreNotForcePairedAndLiveKeepsTheirEvidenceSeparate() {
         let full = observation()
         var covered = observation()
@@ -124,6 +138,13 @@ final class RecognitionTraceComparisonTests: XCTestCase {
         let local: [[String: Any]] = [["stage": "pipSummary", "state": "extracted", "retainedCount": 0]]
         XCTAssertEqual(RecognitionTracePresentation.detectedPipCount(in: local) as? Int, 0)
         XCTAssertTrue(RecognitionTracePresentation.detectedPipCount(in: []) is NSNull)
+    }
+
+    func testUIReceiptRecordIDsDoNotCountAsEvidenceDifferences() throws {
+        var a = observation(), b = observation(id: "covered")
+        a["uiReceipts"] = [["recordID": "record-A", "card": "9C", "recordAccepted": true]]
+        b["uiReceipts"] = [["recordID": "record-B", "card": "9C", "recordAccepted": true]]
+        XCTAssertNil(try RecognitionTracePresentation.firstDifference(a, b))
     }
 
     func testMissingStagesCompareAsNullAndPipelineErrorIsVisible() throws {

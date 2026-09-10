@@ -47,7 +47,7 @@ final class RecognitionTraceStorageTests: XCTestCase {
     func testTraceContextRestoresOnThrowAndCountsWhenTraceIsOff() throws {
         enum Failure: Error { case expected }
         let outer = RecognitionTrace(), inner = RecognitionTrace()
-        RecognitionTrace.withCurrent(outer) {
+        try RecognitionTrace.withCurrent(outer) {
             XCTAssertThrowsError(try RecognitionTrace.withCurrent(inner) { throw Failure.expected })
             XCTAssertTrue(RecognitionTrace.current === outer)
         }
@@ -127,4 +127,3 @@ final class RecognitionTraceStorageTests: XCTestCase {
         return result
     }
 }
-

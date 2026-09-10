@@ -44,7 +44,7 @@ final class RecognitionTracePixelsTests: XCTestCase {
         XCTAssertEqual(values["bytes"] as? Data, Data([0, 7, 255]))
         XCTAssertEqual((values["nested"] as? NSDictionary)?["label"] as? String, "no-propagate")
         let restoredColorValue = try XCTUnwrap(CVBufferCopyAttachment(restored, kCVImageBufferCGColorSpaceKey, &mode))
-        XCTAssertEqual(CFGetTypeID(restoredColorValue), CGColorSpaceGetTypeID())
+        XCTAssertEqual(CFGetTypeID(restoredColorValue), CGColorSpace.typeID)
         let restoredColor = restoredColorValue as! CGColorSpace
         XCTAssertEqual(restoredColor.model, color.model)
         XCTAssertEqual(restoredColor.copyICCData().map { $0 as Data }, color.copyICCData().map { $0 as Data })
