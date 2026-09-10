@@ -28,7 +28,10 @@ final class ScanPipeline {
             maximumEventFrames: configuration.maximumEventFrames,
             maximumPendingEventFrames: configuration.pendingEventCapacity)
         snapshotPool = CaptureSnapshotPool(maximumDimension: configuration.snapshotMaximumDimension,
-                                           byteLimit: configuration.snapshotByteLimit)
+            byteLimit: configuration.snapshotByteLimit,
+            minimumBufferCount: configuration.historyCapacity + configuration.pendingEventCapacity
+                + max(0, min(configuration.maximumEventFrames,
+                             configuration.preFrames + 1 + configuration.postFrames) - configuration.historyCapacity) + 2)
         motion = ROIMotionTrigger(roi: configuration.motionROI, threshold: configuration.motionThreshold,
                                  releaseThreshold: configuration.motionReleaseThreshold)
         injectedRecognizer = recognizer

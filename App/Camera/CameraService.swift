@@ -185,7 +185,7 @@ final class CameraService: NSObject {
     private func configureBestFrameRate(for camera: AVCaptureDevice) throws -> Int {
         // Prefer short sampling intervals for fast passes. Each timing value
         // remains clamped to the selected device format's rational bounds.
-        let desiredRates = CameraCapturePolicy.preferredFrameRates.filter { $0 <= 60 }
+        let desiredRates = CameraCapturePolicy.preferredFrameRates
         let formats = camera.formats.enumerated().compactMap { index, format -> (format: AVCaptureDevice.Format, option: CameraFormatOption)? in
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             guard let rate = desiredRates.first(where: { supports(frameRate: Double($0), in: format) }) else {

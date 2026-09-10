@@ -39,6 +39,8 @@ final class CardEventCoordinator {
         var lastSeen: Date
         var hitCount: Int
         var wasRecorded: Bool
+        var confirmedVote: Vote?
+        var isClosed: Bool
         var captures: Set<TimeInterval>
         var observationBoxes: [TimeInterval: CGRect]
 
@@ -55,6 +57,8 @@ final class CardEventCoordinator {
             lastSeen = date
             hitCount = 1
             wasRecorded = false
+            confirmedVote = nil
+            isClosed = false
             captures = [date.timeIntervalSinceReferenceDate]
             observationBoxes = [date.timeIntervalSinceReferenceDate: detection.boundingBox]
         }
@@ -64,6 +68,7 @@ final class CardEventCoordinator {
     /// label while it leaves the frame. Keep a very short spatial memory so
     /// that label flicker cannot become a second card in the history.
     private struct RecentRecordedPass {
+        let trackID: UUID
         let date: Date
         let box: CGRect
         let velocity: CGPoint
@@ -155,6 +160,7 @@ final class CardEventCoordinator {
         }
 
         var matchedTrackIDs = Set<UUID>()
+        var newEntrants: [CardDetection] = []
         for detection in validDetections {
             if let trackIndex = bestTrack(
                 for: detection,
@@ -166,6 +172,20 @@ final class CardEventCoordinator {
             } else {
                 tracks.append(Track(detection: detection, date: date))
                 matchedTrackIDs.insert(tracks[tracks.endIndex - 1].id)
+                newEntrants.append(detection)
+            }
+        }
+
+        // Complete all associations before closing an unmatched trajectory:
+        // another detection in this same capture may still show the old card.
+        for entrant in newEntrants {
+            for index in tracks.indices where !matchedTrackIDs.contains(tracks[index].id) {
+                let track = tracks[index]
+                if (track.confirmedVote?.label ?? track.votes.last?.label) != entrant.card,
+                   reversesEstablishedTrajectory(track, toward: entrant.boundingBox),
+                   track.box.intersectionOverUnion(with: entrant.boundingBox) >= minimumOverlap {
+                    tracks[index].isClosed = true
+                }
             }
         }
 
@@ -183,9 +203,12 @@ final class CardEventCoordinator {
             }
 
             tracks[index].wasRecorded = true
+            tracks[index].confirmedVote = Vote(label: stableCard.card, confidence: stableCard.confidence,
+                                              hasIndependentSupport: stableCard.hasIndependentSupport)
             guard recordedInThisCapture.insert(stableCard.card).inserted else { continue }
             recentRecordedPasses.append(
                 RecentRecordedPass(
+                    trackID: tracks[index].id,
                     date: date,
                     box: tracks[index].box,
                     velocity: tracks[index].velocity
@@ -205,7 +228,7 @@ final class CardEventCoordinator {
         }
 
         let stableDetections = tracks.compactMap { track -> CardDetection? in
-            guard let stableCard = stableCard(in: track.votes),
+            guard !track.isClosed, let stableCard = confirmedCardOrConsensus(in: track),
                   track.wasRecorded || matchedTrackIDs.contains(track.id),
                   !hasUnresolvedLabelConflict(for: track, at: date),
                   track.wasRecorded || !hasRecentPassConflict(for: track, at: date) else {
@@ -341,6 +364,10 @@ final class CardEventCoordinator {
             track.captures = Set(track.captures.sorted().suffix(240))
             track.observationBoxes = track.observationBoxes.filter { track.captures.contains($0.key) }
         }
+        // A published decision is immutable. A conflicting frame may still be
+        // the same moving target, but cannot change its identity or lend votes
+        // to a later target. Unconfirmed tracks retain whole-label votes only.
+        guard track.confirmedVote == nil || track.confirmedVote?.label == detection.card else { return }
         track.votes.append(Vote(
             label: detection.card,
             confidence: detection.confidence,
@@ -358,7 +385,7 @@ final class CardEventCoordinator {
 
         for index in tracks.indices {
             let track = tracks[index]
-            guard !excludedIDs.contains(track.id) else {
+            guard !track.isClosed, !excludedIDs.contains(track.id) else {
                 continue
             }
 
@@ -384,11 +411,13 @@ final class CardEventCoordinator {
             )
             let overlap = predictedBox.intersectionOverUnion(with: detection.boundingBox)
             let centerDistance = predictedCenter.distance(to: detection.boundingBox.center)
-            let sameLabel = track.votes.last?.label == detection.card
+            let sameLabel = (track.confirmedVote?.label ?? track.votes.last?.label) == detection.card
             if !sameLabel {
-                // Permit a brief label flicker only on an already confirmed,
-                // tightly continuous trajectory. A later entrant is a new track.
-                guard track.wasRecorded, age <= 0.09,
+                guard !reversesEstablishedTrajectory(track, toward: detection.boundingBox) else { continue }
+                // Labels are observations, not physical identity. Permit tight
+                // continuity before confirmation too, so 10c/9c/10c remains
+                // one track. A trajectory break still starts a separate pass.
+                guard age <= 0.09,
                       overlap >= 0.5 || centerDistance <= 0.025 else { continue }
             }
 
@@ -414,6 +443,7 @@ final class CardEventCoordinator {
             guard overlap >= minimumOverlap || centerDistance <= distanceGate else { continue }
 
             let score = overlap * 2.5 - centerDistance * 1.10 - sizeDifference * 0.25
+                + (sameLabel ? 0.01 : 0)
             if best == nil || score > best!.score {
                 best = (index, score)
             }
@@ -467,6 +497,22 @@ final class CardEventCoordinator {
         return (winner.card, confidence, winner.votes.contains { $0.hasIndependentSupport })
     }
 
+    private func confirmedCardOrConsensus(in track: Track)
+        -> (card: CardFace, confidence: Float, hasIndependentSupport: Bool)? {
+        if let vote = track.confirmedVote {
+            return (vote.label, vote.confidence, vote.hasIndependentSupport)
+        }
+        return stableCard(in: track.votes)
+    }
+
+    private func reversesEstablishedTrajectory(_ track: Track, toward box: CGRect) -> Bool {
+        let displacement = CGPoint(x: box.midX - track.box.midX, y: box.midY - track.box.midY)
+        guard track.hitCount >= 3, track.velocity.magnitude >= 0.5,
+              displacement.magnitude >= 0.04 else { return false }
+        let dot = displacement.x * track.velocity.x + displacement.y * track.velocity.y
+        return dot < -0.5 * displacement.magnitude * track.velocity.magnitude
+    }
+
     /// When two labels both become stable in the same tiny region at the same
     /// instant, neither is reliable enough to add to a permanent magic-deal
     /// history. A real next card normally arrives after the previous one has
@@ -478,6 +524,7 @@ final class CardEventCoordinator {
 
         return tracks.contains { other in
             guard other.id != track.id,
+                  !other.isClosed,
                   !other.wasRecorded,
                   let stableOtherCard = stableCard(in: other.votes)?.card,
                   stableOtherCard != stableTrackCard,
@@ -499,6 +546,8 @@ final class CardEventCoordinator {
         recentRecordedPasses.contains { recent in
             let elapsed = date.timeIntervalSince(recent.date)
             guard elapsed >= 0, elapsed <= recentPassGuardWindow else { return false }
+            if let prior = tracks.first(where: { $0.id == recent.trackID }),
+               prior.isClosed || reversesEstablishedTrajectory(prior, toward: track.box) { return false }
             return describesSamePass(
                 box: track.box,
                 velocity: track.velocity,

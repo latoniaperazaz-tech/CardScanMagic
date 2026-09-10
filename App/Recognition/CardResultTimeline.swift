@@ -20,6 +20,9 @@ final class CardResultTimeline {
     private var checkpoint = CardEventCoordinator()
     private var checkpointTimestamp = -Double.infinity
     private var publishedPasses: [UUID: PublishedPass] = [:]
+    /// Checkpoint tracks survive replay with their UUID intact. Keep their
+    /// published identity even after the first confirming observation ages out.
+    private var checkpointPublishedIDs: [UUID: UUID] = [:]
     private var recordedFaces = Set<CardFace>()
     private(set) var rejectedOldResults = 0
 
@@ -30,6 +33,7 @@ final class CardResultTimeline {
         checkpoint.reset()
         checkpointTimestamp = -Double.infinity
         publishedPasses.removeAll()
+        checkpointPublishedIDs.removeAll()
         recordedFaces.removeAll()
         rejectedOldResults = 0
     }
@@ -48,28 +52,29 @@ final class CardResultTimeline {
         let replay = checkpoint.copy()
         var decisions: [CardPassDecision] = []
         var stable: [CardDetection] = []
+        var footprints = replay.trackObservationBoxes
         for result in results {
             let update = replay.processUpdate(result.detections,
                 at: Date(timeIntervalSinceReferenceDate: result.timestamp))
             decisions.append(contentsOf: update.decisions)
             stable = update.stableDetections
+            // A later empty capture can retire a track and remove its boxes.
+            // Preserve each observation while replaying, before that happens.
+            mergeFootprints(replay.trackObservationBoxes, into: &footprints)
         }
-        let footprints = replay.trackObservationBoxes
+        var replayPublishedIDs = linkPublishedTracks(footprints, knownIDs: checkpointPublishedIDs)
         var delivered: [CardPassDecision] = []
         var records: [CardRecord] = []
         for decision in decisions {
             let observations = footprints[decision.eventID] ?? [:]
             let lastSeen = observations.keys.max() ?? decision.record.recordedAt.timeIntervalSinceReferenceDate
-            let existingID = publishedPasses[decision.eventID] != nil ? decision.eventID
-                : publishedPasses.keys.sorted(by: { $0.uuidString < $1.uuidString }).first {
-                    sharesObservation(publishedPasses[$0]!.observations, observations)
-                }
-            if let existingID {
-                publishedPasses[existingID]?.observations.merge(observations) { _, new in new }
-                publishedPasses[existingID]?.lastSeen = lastSeen
+            if let publishedID = linkPublishedTracks([decision.eventID: observations],
+                                                     knownIDs: replayPublishedIDs)[decision.eventID] {
+                replayPublishedIDs[decision.eventID] = publishedID
                 continue
             }
             publishedPasses[decision.eventID] = PublishedPass(observations: observations, lastSeen: lastSeen)
+            replayPublishedIDs[decision.eventID] = decision.eventID
             let duplicate = !recordedFaces.insert(decision.record.card).inserted
             let published = CardPassDecision(eventID: decision.eventID, record: decision.record,
                 captureTimestamps: Set(observations.keys), duplicateCard: duplicate)
@@ -83,9 +88,52 @@ final class CardResultTimeline {
             _ = checkpoint.processUpdate(oldest.detections,
                 at: Date(timeIntervalSinceReferenceDate: oldest.timestamp))
             checkpointTimestamp = oldest.timestamp
+            checkpointPublishedIDs = linkPublishedTracks(checkpoint.trackObservationBoxes,
+                                                        knownIDs: checkpointPublishedIDs)
         }
-        publishedPasses = publishedPasses.filter { $0.value.lastSeen >= checkpointTimestamp - 0.4 }
+        let checkpointPasses = Set(checkpointPublishedIDs.values)
+        let oldestUsefulObservation = checkpointTimestamp - 0.4
+        publishedPasses = publishedPasses.filter {
+            checkpointPasses.contains($0.key) || $0.value.lastSeen >= oldestUsefulObservation
+        }
+        for id in Array(publishedPasses.keys) {
+            guard var pass = publishedPasses[id] else { continue }
+            pass.observations = pass.observations.filter {
+                $0.key >= oldestUsefulObservation
+            }
+            publishedPasses[id] = pass
+        }
         return CardEventUpdate(records: records, stableDetections: stable, decisions: delivered)
+    }
+
+    private func mergeFootprints(_ incoming: [UUID: [TimeInterval: CGRect]],
+                                 into destination: inout [UUID: [TimeInterval: CGRect]]) {
+        for (id, observations) in incoming {
+            destination[id, default: [:]].merge(observations) { _, new in new }
+        }
+    }
+
+    /// Refresh all matched tracks, including confirmed checkpoint tracks that
+    /// emit no new decisions. Identity never depends on a card's predicted label.
+    private func linkPublishedTracks(_ footprints: [UUID: [TimeInterval: CGRect]],
+                                     knownIDs: [UUID: UUID]) -> [UUID: UUID] {
+        var linked: [UUID: UUID] = [:]
+        let publishedIDs = publishedPasses.keys.sorted { $0.uuidString < $1.uuidString }
+        for (trackID, observations) in footprints {
+            let knownID = knownIDs[trackID] ?? trackID
+            let publishedID = publishedPasses[knownID] != nil ? knownID : publishedIDs.first {
+                sharesObservation(publishedPasses[$0]!.observations, observations)
+            }
+            guard let publishedID else { continue }
+            linked[trackID] = publishedID
+            guard var pass = publishedPasses[publishedID] else { continue }
+            pass.observations.merge(observations) { _, new in new }
+            if let lastSeen = observations.keys.max() {
+                pass.lastSeen = max(pass.lastSeen, lastSeen)
+            }
+            publishedPasses[publishedID] = pass
+        }
+        return linked
     }
 
     private func sharesObservation(_ lhs: [TimeInterval: CGRect], _ rhs: [TimeInterval: CGRect]) -> Bool {

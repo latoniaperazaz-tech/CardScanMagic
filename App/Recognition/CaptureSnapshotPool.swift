@@ -23,16 +23,19 @@ final class CaptureSnapshotPool {
     private let lock = NSLock()
     private let maximumDimension: Int
     private let byteLimit: Int
+    private let minimumBufferCount: Int
     private var pool: CVPixelBufferPool?
-    private var format: Format?
+    private var inputFormat: Format?
     private var bytesPerBuffer = 0
     private var allocationThreshold = 0
     private var failures = 0
     private var formatChangeRejections = 0
 
-    init(maximumDimension: Int = 1280, byteLimit: Int = 72 * 1_024 * 1_024) {
+    init(maximumDimension: Int = 1280, byteLimit: Int = 72 * 1_024 * 1_024,
+         minimumBufferCount: Int = 1) {
         self.maximumDimension = max(2, min(4096, maximumDimension))
         self.byteLimit = max(0, byteLimit)
+        self.minimumBufferCount = max(1, minimumBufferCount)
     }
 
     func copy(_ source: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> CapturedImage? {
@@ -44,7 +47,7 @@ final class CaptureSnapshotPool {
         }
         // Do not create a second pool while old ring/event snapshots may still
         // exist. Fixed output format also prevents mixed geometry in an event.
-        if let format, format != requested {
+        if let inputFormat, inputFormat != requested {
             formatChangeRejections += 1
             failures += 1
             return nil
@@ -112,6 +115,38 @@ final class CaptureSnapshotPool {
     }
 
     private func configure(_ requested: Format) -> CVPixelBuffer? {
+        // A count bound must fit the byte bound before publishing any frames.
+        // Otherwise a ring can retain every pool buffer, and copy-before-ring-
+        // overwrite will never be able to allocate the next capture. Size the
+        // snapshots for ring + pending + in-flight + incoming ownership, while
+        // the immediately selected live frame still uses its native pixels.
+        let perBufferLimit = byteLimit / minimumBufferCount
+        guard perBufferLimit > 0 else { return nil }
+        var destination = requested
+        for _ in 0..<12 {
+            var candidate = createPool(destination)
+            if let ready = candidate, ready.bytes <= perBufferLimit {
+                pool = ready.pool
+                inputFormat = requested
+                bytesPerBuffer = ready.bytes
+                allocationThreshold = byteLimit / ready.bytes
+                return ready.first
+            }
+            guard let measuredBytes = candidate?.bytes else { return nil }
+            // Release the unpublished probe BEFORE creating a smaller pool.
+            // Resets never use this path, so retained older-session frames
+            // cannot escape the single pool allocation threshold.
+            candidate = nil
+            let ratio = min(0.95, sqrt(Double(perBufferLimit) / Double(measuredBytes)) * 0.98)
+            let width = Int(Double(destination.width) * ratio) / 2 * 2
+            let height = Int(Double(destination.height) * ratio) / 2 * 2
+            guard width >= 2, height >= 2 else { return nil }
+            destination = Format(width: width, height: height, pixelFormat: requested.pixelFormat)
+        }
+        return nil
+    }
+
+    private func createPool(_ requested: Format) -> (pool: CVPixelBufferPool, first: CVPixelBuffer, bytes: Int)? {
         // Refuse undersized budgets before asking CoreVideo to allocate the
         // first surface. This conservative bound covers row/plane padding;
         // subsequent thresholds use the measured pixel-buffer storage size.
@@ -136,11 +171,7 @@ final class CaptureSnapshotPool {
               let first else { return nil }
         let bytes = Self.allocatedBytes(first)
         guard bytes > 0, bytes <= byteLimit else { return nil }
-        pool = createdPool
-        format = requested
-        bytesPerBuffer = bytes
-        allocationThreshold = byteLimit / bytes
-        return first
+        return (createdPool, first, bytes)
     }
 
     private static func allocatedBytes(_ buffer: CVPixelBuffer) -> Int {
