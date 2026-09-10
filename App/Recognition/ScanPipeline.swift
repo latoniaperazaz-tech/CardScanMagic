@@ -13,6 +13,8 @@ final class ScanPipeline {
     /// Metadata only: observers cannot accidentally retain an event's pixels.
     var onCaptureEvent: ((SessionID, UInt64, Int, Bool) -> Void)?
     var onDebugSummary: ((Phase1DebugSummary) -> Void)?
+    var onRecognitionTrace: ((SessionID, String, String) -> Void)?
+    var onTraceExport: ((URL, Bool) -> Void)?
     private let scheduler: EventFrameScheduler<CapturedImage>
     private let snapshotPool: CaptureSnapshotPool
     private let motion: ROIMotionTrigger
@@ -23,12 +25,16 @@ final class ScanPipeline {
     private let diagnosticsLock = NSLock()
     private var diagnosticRuns: [SessionID: CaptureDiagnostics] = [:]
     private var activeDiagnostics: CaptureDiagnostics?
+    private var traceRuns: [SessionID: RecognitionTraceSession] = [:]
+    private let injectedTraceConfiguration: RecognitionTraceConfiguration?
     private var cameraOwners: [UInt64: SessionID] = [:]
     private let configuration: CaptureConfiguration
     private let injectedRecognizer: Recognizer?
     private var engine: RecognitionEngine?
 
-    init(configuration: CaptureConfiguration = CaptureConfiguration(), recognizer: Recognizer? = nil) {
+    init(configuration: CaptureConfiguration = CaptureConfiguration(), recognizer: Recognizer? = nil,
+         traceConfiguration: RecognitionTraceConfiguration? = nil) {
+        injectedTraceConfiguration = traceConfiguration
         self.configuration = configuration
         scheduler = EventFrameScheduler(ringCapacity: configuration.historyCapacity,
             preFrameCount: configuration.preFrames, postFrameCount: configuration.postFrames,
@@ -111,6 +117,9 @@ final class ScanPipeline {
             value: image, motionScore: measurement.score, informationScore: information, arrivalUptime: arrival)
         diagnostics?.capture(frame, width: CVPixelBufferGetWidth(image.pixelBuffer),
                              height: CVPixelBufferGetHeight(image.pixelBuffer))
+        traceRun(for: sessionID)?.sourceFrame(frame.id, timestamp: timestamp,
+            originalWidth: CVPixelBufferGetWidth(pixelBuffer), originalHeight: CVPixelBufferGetHeight(pixelBuffer),
+            snapshotWidth: CVPixelBufferGetWidth(image.pixelBuffer), snapshotHeight: CVPixelBufferGetHeight(image.pixelBuffer))
         if let event = scheduler.ingest(frame, triggered: measurement.triggered) {
             let eventID = event.id, count = event.frames.count, complete = event.isComplete
             let missing = event.missingPreFrames, frameIDs = event.frames.map(\.id)
@@ -139,6 +148,11 @@ final class ScanPipeline {
         let diagnostics = candidate?.beginActivity() == true ? candidate : nil
         diagnostics?.selected(frame, source: frame.id == nativeFrameID && nativeBuffer != nil ? "native" : "snapshot",
                               width: CVPixelBufferGetWidth(input), height: CVPixelBufferGetHeight(input))
+        let traceRun = traceRun(for: sessionID)
+        let trace = traceRun?.makeTrace(frameID: frame.id,
+            source: frame.id == nativeFrameID && nativeBuffer != nil ? "native" : "snapshot",
+            width: CVPixelBufferGetWidth(input), height: CVPixelBufferGetHeight(input),
+            timestamp: frame.timestamp, orientation: inputOrientation)
         processingQueue.async { [weak self] in
             defer { diagnostics?.endActivity() }
             guard let self else { return }
@@ -147,23 +161,36 @@ final class ScanPipeline {
                 if self.engine != nil || self.injectedRecognizer != nil,
                    let current = self.sessionGate.activeSessionForSampling() { self.scheduleDrain(for: current) }
             }
+            defer { if let trace { traceRun?.complete(trace) } }
             guard self.sessionGate.shouldDeliver(for: sessionID) else {
+                trace?.event("pipelineRejected", ["reason": "NO_RECOGNITION_INPUT", "detail": "cancelledBeforeEngine"])
                 diagnostics?.recognitionCancelled(frameID: frame.id)
                 return
             }
             do {
+                if let trace { traceRun?.captureInput(input, orientation: inputOrientation, trace: trace) }
                 let started = ProcessInfo.processInfo.systemUptime
                 diagnostics?.recognitionStarted(frameID: frame.id, at: started)
                 let detections: [CardDetection] = try autoreleasepool {
                     if let recognize = self.injectedRecognizer { return try recognize(input, inputOrientation) }
                     guard let engine = self.engine else { throw RecognitionError.modelMissing }
-                    return try engine.recognize(pixelBuffer: input, orientation: inputOrientation)
+                    return try RecognitionTrace.withCurrent(trace) {
+                        try engine.recognize(pixelBuffer: input, orientation: inputOrientation)
+                    }
                 }
                 diagnostics?.recognitionCompleted(frameID: frame.id, at: ProcessInfo.processInfo.systemUptime,
                     detections: detections, acceptedBySession: self.sessionGate.shouldDeliver(for: sessionID))
-                guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
-                let update = self.timeline.insert(frameID: frame.id, timestamp: frame.timestamp, detections: detections)
-                guard self.sessionGate.shouldDeliver(for: sessionID) else { return }
+                guard self.sessionGate.shouldDeliver(for: sessionID) else {
+                    trace?.event("pipelineRejected", ["reason": "UI_REJECTED", "detail": "sessionBeforeTimeline"])
+                    return
+                }
+                let update = RecognitionTrace.withCurrent(trace) {
+                    self.timeline.insert(frameID: frame.id, timestamp: frame.timestamp, detections: detections)
+                }
+                guard self.sessionGate.shouldDeliver(for: sessionID) else {
+                    trace?.event("pipelineRejected", ["reason": "UI_REJECTED", "detail": "sessionAfterTimeline"])
+                    return
+                }
                 diagnostics?.decisions(update.decisions, at: ProcessInfo.processInfo.systemUptime)
                 self.onDetections?(sessionID, update.stableDetections)
                 if !update.decisions.isEmpty {
@@ -174,12 +201,14 @@ final class ScanPipeline {
                 }
                 if !update.records.isEmpty {
                     if let deliver = self.onRecordsWithDiagnostics {
-                        deliver(sessionID, update.records, DiagnosticRecordReceipt(diagnostics))
+                        deliver(sessionID, update.records, DiagnosticRecordReceipt(diagnostics,
+                            traceRun: traceRun, recognitionID: trace?.recognitionID, offered: update.records))
                     } else {
                         self.onRecords?(sessionID, update.records)
                     }
                 }
             } catch {
+                trace?.event("pipelineError", ["reason": "RECOGNITION_ERROR", "error": error.localizedDescription])
                 diagnostics?.recognitionFailed(frameID: frame.id, at: ProcessInfo.processInfo.systemUptime,
                                                error: error.localizedDescription)
                 guard self.sessionGate.failCurrentSession(for: sessionID) else { return }
@@ -233,10 +262,20 @@ final class ScanPipeline {
         diagnosticsLock.lock(); defer { diagnosticsLock.unlock() }
         return diagnosticRuns[sessionID]
     }
+    private func traceRun(for sessionID: SessionID) -> RecognitionTraceSession? {
+        diagnosticsLock.lock(); defer { diagnosticsLock.unlock() }
+        return traceRuns[sessionID]
+    }
     private func beginDiagnostics(sessionID: SessionID) {
         finishDiagnostics(reason: "newSession")
         let run = CaptureDiagnostics(sessionID: sessionID, configuration: configuration)
+        let traceConfiguration = injectedTraceConfiguration ?? .device
+        let trace = traceConfiguration.enabled
+            ? RecognitionTraceSession(runID: run.runID, sessionID: sessionID, configuration: traceConfiguration) : nil
+        trace?.onLive = { [weak self] id, text in self?.onRecognitionTrace?(sessionID, id, text) }
+        trace?.onExport = { [weak self] url, complete in self?.onTraceExport?(url, complete) }
         diagnosticsLock.lock()
+        traceRuns[sessionID] = trace
         diagnosticRuns[sessionID] = run
         activeDiagnostics = run
         diagnosticsLock.unlock()
@@ -253,9 +292,11 @@ final class ScanPipeline {
             // finish, on a utility queue, without holding their pixel buffers.
             Phase1DebugExporter.enqueue(summary)
             guard let self else { return }
+            self.traceRun(for: summary.sessionID)?.finish(summary)
             self.onDebugSummary?(summary)
             self.diagnosticsLock.lock()
             self.diagnosticRuns.removeValue(forKey: summary.sessionID)
+            self.traceRuns.removeValue(forKey: summary.sessionID)
             self.diagnosticsLock.unlock()
         }
     }

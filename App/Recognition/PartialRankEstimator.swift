@@ -57,6 +57,8 @@ enum PartialRankEstimator {
         var visibleMissingCount = 0
         var uncertainMissingCount = 0
         var matchQuality = 0.0
+        // Observational only: nil means no hypothesis replaced the initial score.
+        var traceUnclampedValue: Double?
     }
 
     private static let templates: [Template] = [
@@ -84,7 +86,17 @@ enum PartialRankEstimator {
         uncertainRegions: [CGRect] = [],
         surfaceAnchored: Bool = false
     ) -> PartialRankResult {
-        guard imageAspectRatio.isFinite, imageAspectRatio > 0 else { return emptyResult() }
+        RecognitionTrace.call("estimator")
+        let trace = RecognitionTrace.current
+        trace?.event("rank.input", ["points": RecognitionTrace.points(points),
+            "imageAspectRatio": imageAspectRatio, "visibleRegion": visibleRegion,
+            "uncertainRegions": uncertainRegions.map(RecognitionTrace.rect), "surfaceAnchored": surfaceAnchored,
+            "coordinateSpace": "normalized_candidate_x_right_y_down"])
+        guard imageAspectRatio.isFinite, imageAspectRatio > 0 else {
+            trace?.event("rank.result", ["status": "notEvaluated", "reason": "INVALID_IMAGE_ASPECT",
+                "finalRank": NSNull(), "candidates": NSNull(), "confidence": NSNull(), "margin": NSNull()])
+            return emptyResult()
+        }
         let viewport = Point(x: min(imageAspectRatio, 1), y: min(1 / imageAspectRatio, 1))
         let region = normalizedRegion(visibleRegion)
         let uncertainty = uncertainRegions.compactMap { rect -> CGRect? in
@@ -104,9 +116,16 @@ enum PartialRankEstimator {
             observed.append(candidate)
             if observed.count == 14 { break }
         }
-        guard !observed.isEmpty else { return emptyResult() }
+        guard !observed.isEmpty else {
+            trace?.event("rank.result", ["status": "notEvaluated", "reason": "NO_VALID_ESTIMATOR_PIPS",
+                "finalRank": NSNull(), "candidates": NSNull(), "confidence": NSNull(), "margin": NSNull()])
+            return emptyResult()
+        }
         // Canonical order makes the capped hypothesis search independent of detector ordering.
         observed.sort { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
+        trace?.event("rank.normalized", ["normalizedPoints": observed.map { ["x": $0.x, "y": $0.y] },
+            "viewport": ["width": viewport.x, "height": viewport.y], "visibleRegion": region,
+            "uncertainRegions": uncertainty.map(RecognitionTrace.rect), "coordinateSpace": "aspect_normalized_viewport"])
         let hasSurfaceAnchor = surfaceAnchored && region == "full"
         let scores = templates.map { template in
             if hasSurfaceAnchor {
@@ -126,6 +145,17 @@ enum PartialRankEstimator {
                 probability: weights[index] / totalWeight,
                 score: scores[index].value, matchedCount: scores[index].matchedCount)
             candidates.append(candidate)
+            trace?.event("rank.candidate", ["rank": candidate.rank,
+                "status": scores[index].traceUnclampedValue == nil ? "notEvaluated" : "evaluated",
+                "rawScore": scores[index].traceUnclampedValue as Any? ?? NSNull(),
+                "score": candidate.score, "normalizedScore": candidate.probability,
+                "probability": candidate.probability,
+                "matchedCount": scores[index].traceUnclampedValue == nil ? NSNull() : candidate.matchedCount as Any,
+                "visibleMissingCount": scores[index].traceUnclampedValue == nil ? NSNull() : scores[index].visibleMissingCount as Any,
+                "ignoredOccludedCount": scores[index].traceUnclampedValue == nil ? NSNull() : scores[index].uncertainMissingCount as Any,
+                "extraCount": scores[index].traceUnclampedValue == nil ? NSNull() : (observed.count - candidate.matchedCount) as Any,
+                "matchQuality": scores[index].traceUnclampedValue == nil ? NSNull() : scores[index].matchQuality as Any,
+                "layoutConfidence": NSNull(), "layoutConfidenceStatus": "notComputedPerRank"])
         }
         candidates.sort { lhs, rhs in
             if lhs.probability == rhs.probability { return lhs.rank < rhs.rank }
@@ -153,13 +183,35 @@ enum PartialRankEstimator {
         }
         // Similarity fits can explain coincident subsets of multiple ranks. A ranked
         // candidate alone is not evidence that a blurred or partial card is resolved.
-        let resolved = !ambiguousOcclusion && ((centeredFullAce && !hasSurfaceAnchor && uncertainty.isEmpty) || (
-            (observed.count >= 2 || (anchoredSupport && best.rank == "A"))
-                && best.matchedCount == observed.count && best.score >= 0.72
-                && confidence >= 0.52 && best.probability >= 0.27 && margin >= 0.055
-                && (observed.count >= 3 || (region == "full" && best.probability >= 0.42))
+        let resolved = traceCheck(!ambiguousOcclusion, "PIP_OCCLUSION_AMBIGUOUS") && ((centeredFullAce && !hasSurfaceAnchor && uncertainty.isEmpty) || (
+            traceCheck((observed.count >= 2 || (anchoredSupport && best.rank == "A")), "PIP_ABSOLUTE_SUPPORT_INSUFFICIENT")
+                && traceCheck(best.matchedCount == observed.count, "PIP_LAYOUT_UNMATCHED_INPUT")
+                && traceCheck(best.score >= 0.72, "PIP_LAYOUT_SCORE_LOW", ["value": best.score, "minimum": 0.72])
+                && traceCheck(confidence >= 0.52, "PIP_LAYOUT_CONFIDENCE_LOW", ["value": confidence, "minimum": 0.52])
+                && traceCheck(best.probability >= 0.27, "PIP_LAYOUT_PROBABILITY_LOW", ["value": best.probability, "minimum": 0.27])
+                && traceCheck(margin >= 0.055, "PIP_LAYOUT_MARGIN_LOW", ["value": margin, "minimum": 0.055])
+                && traceCheck((observed.count >= 3 || (region == "full" && best.probability >= 0.42)), "PIP_VISIBLE_SUPPORT_INSUFFICIENT")
         ))
+        trace?.event("rank.result", ["status": "evaluated", "resolved": resolved,
+            "reason": resolved ? "RANK_RESOLVED" : "PIP_LAYOUT_AMBIGUOUS",
+            "finalRank": (resolved ? best.rank : nil) as Any? ?? NSNull(),
+            "top1": best.rank, "top2": candidates[1].rank,
+            "top1Probability": best.probability, "top2Probability": candidates[1].probability,
+            "margin": margin, "confidence": confidence, "layoutConfidence": confidence,
+            "ambiguousOcclusion": ambiguousOcclusion, "centeredFullAce": centeredFullAce,
+            "anchoredSupport": anchoredSupport, "surfaceAnchored": hasSurfaceAnchor,
+            "remainingChecks": "notEvaluatedAfterFirstFailedCheckOrAceShortcut"])
         return PartialRankResult(rank: resolved ? best.rank : nil, confidence: confidence, candidates: candidates)
+    }
+
+    private static func traceCheck(_ value: Bool, _ reason: String,
+                                   _ fields: @autoclosure () -> [String: Any] = [:]) -> Bool {
+        if let trace = RecognitionTrace.current {
+            var details = fields()
+            details["status"] = "evaluated"; details["passed"] = value; details["reason"] = reason
+            trace.event("rank.check", details)
+        }
+        return value
     }
 
     private static func makeTemplate(_ rank: String, _ coordinates: [(Double, Double)]) -> Template {
@@ -369,7 +421,7 @@ enum PartialRankEstimator {
         return Score(value: min(1, max(0, value)), matchedCount: matched,
                      visibleMissingCount: missing,
                      uncertainMissingCount: uncertainMissingMask.nonzeroBitCount,
-                     matchQuality: distance)
+                     matchQuality: distance, traceUnclampedValue: value)
     }
 
     private static func isUncertain(_ point: Point, viewport: Point, regions: [CGRect]) -> Bool {

@@ -16,6 +16,10 @@ final class ScanViewModel: ObservableObject {
     @Published private(set) var isRoundComplete = false
     @Published private(set) var statusText = "准备就绪"
     @Published var alertMessage: String?
+    @Published private(set) var traceText = "Trace 尚未开始"
+    @Published private(set) var traceUpdatedAt = Date()
+    @Published private(set) var traceExportText = ""
+    private var lastTraceSessionID: ScanPipeline.SessionID?
 
     let camera = CameraService()
     private let pipeline = ScanPipeline()
@@ -23,6 +27,19 @@ final class ScanViewModel: ObservableObject {
     private var startRequestID: UInt64 = 0
 
     init() {
+        pipeline.onRecognitionTrace = { [weak self] sessionID, _, text in
+            Task { @MainActor in
+                guard let self, self.lastTraceSessionID == nil || sessionID >= self.lastTraceSessionID! else { return }
+                self.lastTraceSessionID = sessionID
+                self.traceText = text
+                self.traceUpdatedAt = Date()
+            }
+        }
+        pipeline.onTraceExport = { [weak self] url, complete in
+            Task { @MainActor in
+                self?.traceExportText = (complete ? "已导出：" : "导出不完整：") + url.lastPathComponent
+            }
+        }
         camera.onDroppedFrame = { [weak self] in self?.pipeline.cameraDroppedFrame() }
         camera.onCallbackBegan = { [weak self] timestamp in self?.pipeline.cameraCallbackBegan(timestamp: timestamp) }
         camera.onFrame = { [weak self] pixelBuffer, timestamp, orientation in
@@ -47,7 +64,13 @@ final class ScanViewModel: ObservableObject {
         pipeline.onRecordsWithDiagnostics = { [weak self] sessionID, newRecords, receipt in
             Task { @MainActor in
                 var accepted: [CardRecord] = []
-                defer { receipt.complete(accepted: accepted) }
+                var rejectReasons: [UUID: String] = [:]
+                var fallbackReason = "UI_REJECTED:ownerUnavailable"
+                defer { receipt.complete(accepted: accepted, rejectReasons: rejectReasons, fallbackReason: fallbackReason) }
+                if let self {
+                    fallbackReason = !self.isScanning ? "UI_REJECTED:notScanning"
+                        : (self.activeSessionID != sessionID ? "UI_REJECTED:sessionMismatch" : "UI_REJECTED:notAccepted")
+                }
                 guard let self,
                       self.isScanning,
                       self.activeSessionID == sessionID else {
@@ -60,6 +83,13 @@ final class ScanViewModel: ObservableObject {
                 // boundary and take only the remaining slots as a final guard.
                 let uniqueRecords = self.uniqueRecords(from: newRecords)
                 let remaining = max(0, Self.cardsPerRound - self.records.count)
+                let uniqueIDs = Set(uniqueRecords.map(\.id))
+                for record in newRecords where !uniqueIDs.contains(record.id) {
+                    rejectReasons[record.id] = "SESSION_DUPLICATE"
+                }
+                for record in uniqueRecords.dropFirst(remaining) {
+                    rejectReasons[record.id] = "UI_REJECTED:roundCapacity"
+                }
                 if remaining > 0 {
                     accepted = Array(uniqueRecords.prefix(remaining))
                     self.records.append(contentsOf: accepted)

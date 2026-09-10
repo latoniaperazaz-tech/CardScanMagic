@@ -89,6 +89,18 @@ final class RecognitionEngine {
         pixelBuffer: CVPixelBuffer,
         orientation: CGImagePropertyOrientation
     ) throws -> [CardDetection] {
+        let trace = RecognitionTrace.current
+        trace?.candidateID = nil
+        trace?.componentID = nil
+        trace?.event("engine.input", ["width": CVPixelBufferGetWidth(pixelBuffer),
+            "height": CVPixelBufferGetHeight(pixelBuffer), "orientation": orientation.rawValue,
+            "pixelFormat": CVPixelBufferGetPixelFormatType(pixelBuffer), "status": "started"])
+        let previousPass = trace?.context["fusionPass"]
+        defer {
+            trace?.candidateID = nil
+            trace?.componentID = nil
+            trace?.context["fusionPass"] = previousPass
+        }
         // CameraService explicitly requests portrait video data and carries
         // that same orientation here. Do not infer it from width/height: a
         // camera format may be physically landscape even when the preview is
@@ -98,6 +110,7 @@ final class RecognitionEngine {
             orientation: orientation
         )
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation)
+        RecognitionTrace.call("coreML")
         try handler.perform([fullFrameRequest])
 
         // The full-frame pass is the normal path. A close card can occupy too
@@ -109,29 +122,43 @@ final class RecognitionEngine {
             region: nil,
             orientedImageSize: orientedImageSize
         )
+        trace?.event("engine.model", ["pass": "full", "modelDetections": RecognitionTrace.detections(fullFrameDetections)])
         let features = try partialExtractor.extract(pixelBuffer: pixelBuffer, orientation: orientation)
         let evidence = Self.partialEvidence(from: features)
         var modelDetections = fullFrameDetections
+        trace?.context["fusionPass"] = "first"
         let firstPass = PartialEvidenceFusion.fuse(model: modelDetections, local: evidence,
                                                    imageSize: orientedImageSize)
         if Self.shouldUseNearFallback(for: firstPass) {
+            trace?.event("engine.nearFallback", ["status": "started"])
             let nearRequests = orientedImageSize.height >= orientedImageSize.width
                 ? portraitNearRequests : landscapeNearRequests
+            for _ in nearRequests { RecognitionTrace.call("coreML") }
             try handler.perform(nearRequests.map(\.request))
             modelDetections += try nearRequests.flatMap { regionRequest in
                 try detections(from: regionRequest.request, region: regionRequest.region,
                                orientedImageSize: orientedImageSize)
             }
+        } else {
+            trace?.event("engine.nearFallback", ["status": "notRun", "reason": "USABLE_FIRST_PASS"])
         }
-        return PartialEvidenceFusion.fuse(model: modelDetections, local: evidence,
+        trace?.event("engine.model", ["pass": "combined", "modelDetections": RecognitionTrace.detections(modelDetections)])
+        trace?.context["fusionPass"] = "final"
+        let result = PartialEvidenceFusion.fuse(model: modelDetections, local: evidence,
                                           imageSize: orientedImageSize)
+        trace?.event("engine.final", ["status": "completed", "finalDetections": RecognitionTrace.detections(result)])
+        return result
     }
 
     /// Shared with image integration tests so OCR-free fixtures exercise the
     /// same topology/visibility handoff as live RecognitionEngine frames.
     static func partialEvidence(from features: [PartialCardFeatures]) -> [PartialEvidenceFusion.Evidence] {
         features.map {
-            PartialEvidenceFusion.Evidence(features: $0, layout: PartialRankEstimator.infer(
+            let trace = RecognitionTrace.current
+            let previous = trace?.candidateID
+            trace?.candidateID = $0.traceCandidateID
+            defer { trace?.candidateID = previous }
+            return PartialEvidenceFusion.Evidence(features: $0, layout: PartialRankEstimator.infer(
                 points: $0.pipCenters, imageAspectRatio: $0.imageAspectRatio,
                 visibleRegion: $0.visibleRegion,
                 uncertainRegions: $0.uncertainRegions,
@@ -155,10 +182,18 @@ final class RecognitionEngine {
         orientedImageSize: CGSize
     ) throws -> [CardDetection] {
         guard let observations = request.results as? [VNRecognizedObjectObservation] else {
+            RecognitionTrace.current?.event("engine.model", ["status": "error", "reason": "MODEL_OUTPUT_UNSUPPORTED",
+                "region": region.map { RecognitionTrace.rect($0) } as Any? ?? NSNull()])
             throw RecognitionError.modelUnsupported
         }
 
-        return observations.compactMap { observation in
+        RecognitionTrace.current?.event("engine.modelObservations", [
+            "region": region.map { RecognitionTrace.rect($0) } as Any? ?? NSNull(),
+            "observations": observations.map { observation in
+                ["boundingBox": RecognitionTrace.rect(observation.boundingBox),
+                 "labels": observation.labels.map { ["identifier": $0.identifier, "confidence": $0.confidence] as [String: Any] }]
+            }])
+        let result: [CardDetection] = observations.compactMap { observation in
             guard let label = observation.labels.first,
                   let card = CardFace.parse(label.identifier) else {
                 return nil
@@ -174,6 +209,10 @@ final class RecognitionEngine {
                 orientedImageSize: orientedImageSize
             )
         }
+        RecognitionTrace.current?.event("engine.modelPass", [
+            "region": region.map { RecognitionTrace.rect($0) } as Any? ?? NSNull(),
+            "modelDetections": RecognitionTrace.detections(result)])
+        return result
     }
 
     /// Returns true when the normal full-frame result is too weak to trust.

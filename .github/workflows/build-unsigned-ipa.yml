@@ -3,6 +3,11 @@ name: Build unsigned iPhone test app
 on:
   workflow_dispatch:
     inputs:
+      recognition_trace:
+        description: "Build with optional Recognition Trace diagnostics panel (runtime default OFF)"
+        required: false
+        default: false
+        type: boolean
       model_source:
         description: "模型来源：现有模型、ManTou YOLO11s，或外部 Core ML 包"
         required: true
@@ -38,6 +43,21 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+      - name: Configure diagnostics build metadata
+        env:
+          TRACE_BUILD: ${{ inputs.recognition_trace }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path('project.yml')
+          value = path.read_text()
+          revision = os.environ['GITHUB_SHA']
+          value = value.replace('    SWIFT_VERSION: "5.0"', '    SWIFT_VERSION: "5.0"\n    INFOPLIST_KEY_TraceSourceRevision: "' + revision + '"')
+          if os.environ['TRACE_BUILD'] == 'true':
+              value = value.replace('    SWIFT_VERSION: "5.0"', '    SWIFT_VERSION: "5.0"\n    SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) RECOGNITION_TRACE"')
+          path.write_text(value)
+          PY
       - name: Use a stable Python version for Core ML export
         uses: actions/setup-python@v5
         with:

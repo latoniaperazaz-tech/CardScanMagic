@@ -134,23 +134,39 @@ final class CardEventCoordinator {
     }
 
     func processUpdate(_ detections: [CardDetection], at date: Date) -> CardEventUpdate {
+        let trace = RecognitionTrace.current
+        let previousContext = trace?.context
+        defer { if let previousContext { trace?.context = previousContext } }
+        trace?.event("track.input", ["detections": RecognitionTrace.detections(detections),
+            "timestamp": date.timeIntervalSinceReferenceDate, "decisionPublished": false])
         guard date.timeIntervalSinceReferenceDate.isFinite else {
+            trace?.event("track.rejected", ["reason": "NONFINITE_TIMESTAMP", "decisionPublished": false])
             return CardEventUpdate(records: [], stableDetections: [])
         }
 
         // Camera timestamps identify distinct captures, not inference attempts.
         // Ignore repeated and late results so neither can add a temporal vote.
         if let lastTimestamp, date <= lastTimestamp {
+            trace?.event("track.rejected", ["reason": "REPEATED_OR_LATE_CAPTURE",
+                "lastTimestamp": lastTimestamp.timeIntervalSinceReferenceDate, "decisionPublished": false])
             return CardEventUpdate(records: [], stableDetections: [])
         }
         lastTimestamp = date
 
         let validDetections = detections
-            .compactMap { sanitizedDetection($0) }
+            .enumerated().compactMap { index, detection in
+                trace?.context["detectionIndex"] = index
+                return sanitizedDetection(detection)
+            }
             .sorted { $0.confidence > $1.confidence }
+        trace?.context.removeValue(forKey: "detectionIndex")
+        trace?.event("track.sanitized", ["detections": RecognitionTrace.detections(validDetections)])
         // No detections is not proof of an empty ROI. Preserve tracks through
         // one or two missed frames and use the existing motion/timeout gates.
         for track in tracks where date.timeIntervalSince(track.lastSeen) > trackTimeout {
+            trace?.event("track.retired", ["trackID": track.id.uuidString, "reason": "TRACK_TIMEOUT",
+                "lastSeen": track.lastSeen.timeIntervalSinceReferenceDate,
+                "captureTimestamps": track.captures.sorted(), "wasRecorded": track.wasRecorded])
             retiredCaptures[track.id] = (track.lastSeen, track.captures, track.observationBoxes)
         }
         tracks.removeAll { date.timeIntervalSince($0.lastSeen) > trackTimeout }
@@ -169,10 +185,15 @@ final class CardEventCoordinator {
             ) {
                 update(&tracks[trackIndex], with: detection, at: date)
                 matchedTrackIDs.insert(tracks[trackIndex].id)
+                trace?.event("track.assigned", ["trackID": tracks[trackIndex].id.uuidString,
+                    "assignment": "existing", "detection": RecognitionTrace.detections([detection])])
             } else {
                 tracks.append(Track(detection: detection, date: date))
                 matchedTrackIDs.insert(tracks[tracks.endIndex - 1].id)
                 newEntrants.append(detection)
+                trace?.event("track.assigned", ["trackID": tracks[tracks.endIndex - 1].id.uuidString,
+                    "assignment": "new", "detection": RecognitionTrace.detections([detection]),
+                    "votes": traceVotes(tracks[tracks.endIndex - 1].votes)])
             }
         }
 
@@ -185,6 +206,8 @@ final class CardEventCoordinator {
                    reversesEstablishedTrajectory(track, toward: entrant.boundingBox),
                    track.box.intersectionOverUnion(with: entrant.boundingBox) >= minimumOverlap {
                     tracks[index].isClosed = true
+                    trace?.event("track.closed", ["trackID": track.id.uuidString,
+                        "reason": "NEW_ENTRANT_REVERSES_TRAJECTORY", "entrantCard": entrant.card.code])
                 }
             }
         }
@@ -196,16 +219,25 @@ final class CardEventCoordinator {
         var recordedInThisCapture = Set<CardFace>()
         for index in tracks.indices where !tracks[index].wasRecorded
             && matchedTrackIDs.contains(tracks[index].id) {
+            trace?.context["trackID"] = tracks[index].id.uuidString
             guard let stableCard = stableCard(in: tracks[index].votes),
-                  !hasUnresolvedLabelConflict(for: tracks[index], at: date),
-                  !hasRecentPassConflict(for: tracks[index], at: date) else {
+                  observed(!hasUnresolvedLabelConflict(for: tracks[index], at: date),
+                           stage: "track.decision", reason: "UNRESOLVED_LABEL_CONFLICT"),
+                  observed(!hasRecentPassConflict(for: tracks[index], at: date),
+                           stage: "track.decision", reason: "RECENT_PASS_CONFLICT") else {
+                trace?.event("track.decision", ["decisionPublished": false,
+                    "reason": "TRACK_NOT_CONFIRMED", "conflictChecksAfterFailure": "notEvaluated"])
                 continue
             }
 
             tracks[index].wasRecorded = true
             tracks[index].confirmedVote = Vote(label: stableCard.card, confidence: stableCard.confidence,
                                               hasIndependentSupport: stableCard.hasIndependentSupport)
-            guard recordedInThisCapture.insert(stableCard.card).inserted else { continue }
+            guard recordedInThisCapture.insert(stableCard.card).inserted else {
+                trace?.event("track.decision", ["decisionPublished": false,
+                    "reason": "SAME_CARD_IN_CAPTURE", "decisionCard": stableCard.card.code])
+                continue
+            }
             recentRecordedPasses.append(
                 RecentRecordedPass(
                     trackID: tracks[index].id,
@@ -225,9 +257,22 @@ final class CardEventCoordinator {
             decisions.append(CardPassDecision(eventID: tracks[index].id, record: record,
                                                captureTimestamps: tracks[index].captures,
                                                duplicateCard: duplicateCard))
+            // These are replay proposals. Only Timeline's delivered decisions
+            // are publications; repeated history/fold calls must not count again.
+            trace?.event("track.decision", ["decisionPublished": false, "status": "proposed",
+                "decisionCard": stableCard.card.code, "decisionScore": stableCard.confidence,
+                "duplicateCard": duplicateCard, "reason": duplicateCard ? "SESSION_DUPLICATE" : "CONFIRMED_CARD",
+                "captureTimestamps": tracks[index].captures.sorted(), "recordProduced": !duplicateCard])
         }
+        trace?.context.removeValue(forKey: "trackID")
 
         let stableDetections = tracks.compactMap { track -> CardDetection? in
+            trace?.context["trackID"] = track.id.uuidString
+            trace?.context["trackPurpose"] = "overlay"
+            defer {
+                trace?.context.removeValue(forKey: "trackID")
+                trace?.context.removeValue(forKey: "trackPurpose")
+            }
             guard !track.isClosed, let stableCard = confirmedCardOrConsensus(in: track),
                   track.wasRecorded || matchedTrackIDs.contains(track.id),
                   !hasUnresolvedLabelConflict(for: track, at: date),
@@ -253,6 +298,8 @@ final class CardEventCoordinator {
             displayedCards.insert(detection.card).inserted
         }
 
+        trace?.event("track.output", ["proposalCount": decisions.count, "recordCount": records.count,
+            "stableDetections": RecognitionTrace.detections(uniqueStableDetections), "decisionPublished": false])
         return CardEventUpdate(records: records, stableDetections: uniqueStableDetections, decisions: decisions)
     }
 
@@ -283,48 +330,54 @@ final class CardEventCoordinator {
     }
 
     private func sanitizedDetection(_ detection: CardDetection) -> CardDetection? {
-        guard detection.confidence.isFinite,
-              detection.confidence >= minimumDetectionConfidence else {
+        RecognitionTrace.current?.event("track.sanitizeInput", ["detection": RecognitionTrace.detections([detection])])
+        guard observed(detection.confidence.isFinite, stage: "track.sanitize", reason: "NONFINITE_CONFIDENCE"),
+              observed(detection.confidence >= minimumDetectionConfidence,
+                       stage: "track.sanitize", reason: "LOW_DETECTION_CONFIDENCE") else {
             return nil
         }
 
         let unitRect = CGRect(x: 0, y: 0, width: 1, height: 1)
         let original = detection.boundingBox.standardized
-        guard original.minX.isFinite,
-              original.minY.isFinite,
-              original.maxX.isFinite,
-              original.maxY.isFinite,
-              original.width > 0,
-              original.height > 0 else {
+        guard observed(original.minX.isFinite, stage: "track.sanitize", reason: "NONFINITE_BOX_MIN_X"),
+              observed(original.minY.isFinite, stage: "track.sanitize", reason: "NONFINITE_BOX_MIN_Y"),
+              observed(original.maxX.isFinite, stage: "track.sanitize", reason: "NONFINITE_BOX_MAX_X"),
+              observed(original.maxY.isFinite, stage: "track.sanitize", reason: "NONFINITE_BOX_MAX_Y"),
+              observed(original.width > 0, stage: "track.sanitize", reason: "NONPOSITIVE_BOX_WIDTH"),
+              observed(original.height > 0, stage: "track.sanitize", reason: "NONPOSITIVE_BOX_HEIGHT") else {
             return nil
         }
 
         let clipped = original.intersection(unitRect)
-        guard !clipped.isNull,
-              clipped.width > 0,
-              clipped.height > 0,
-              clipped.area >= minimumBoxArea,
-              clipped.area / original.area >= minimumVisibleFraction else {
+        guard observed(!clipped.isNull, stage: "track.sanitize", reason: "BOX_OUTSIDE_IMAGE"),
+              observed(clipped.width > 0, stage: "track.sanitize", reason: "NONPOSITIVE_VISIBLE_WIDTH"),
+              observed(clipped.height > 0, stage: "track.sanitize", reason: "NONPOSITIVE_VISIBLE_HEIGHT"),
+              observed(clipped.area >= minimumBoxArea, stage: "track.sanitize", reason: "VISIBLE_BOX_TOO_SMALL"),
+              observed(clipped.area / original.area >= minimumVisibleFraction,
+                       stage: "track.sanitize", reason: "INSUFFICIENT_VISIBLE_FRACTION") else {
             return nil
         }
 
         let shortSide = min(clipped.width, clipped.height)
         let longSide = max(clipped.width, clipped.height)
-        guard shortSide >= minimumShortSide,
-              longSide > 0,
-              shortSide / longSide >= minimumShortToLongAspect,
-              min(detection.orientedImageSize.width, detection.orientedImageSize.height)
-                  * shortSide >= minimumShortSidePixels else {
+        guard observed(shortSide >= minimumShortSide, stage: "track.sanitize", reason: "SHORT_SIDE_TOO_SMALL"),
+              observed(longSide > 0, stage: "track.sanitize", reason: "NONPOSITIVE_LONG_SIDE"),
+              observed(shortSide / longSide >= minimumShortToLongAspect,
+                       stage: "track.sanitize", reason: "BOX_ASPECT_TOO_NARROW"),
+              observed(min(detection.orientedImageSize.width, detection.orientedImageSize.height)
+                  * shortSide >= minimumShortSidePixels, stage: "track.sanitize", reason: "SHORT_SIDE_PIXELS_TOO_SMALL") else {
             return nil
         }
 
-        guard detection.orientedImageSize.width.isFinite,
-              detection.orientedImageSize.height.isFinite,
-              detection.orientedImageSize.width > 0,
-              detection.orientedImageSize.height > 0 else {
+        guard observed(detection.orientedImageSize.width.isFinite, stage: "track.sanitize", reason: "NONFINITE_IMAGE_WIDTH"),
+              observed(detection.orientedImageSize.height.isFinite, stage: "track.sanitize", reason: "NONFINITE_IMAGE_HEIGHT"),
+              observed(detection.orientedImageSize.width > 0, stage: "track.sanitize", reason: "NONPOSITIVE_IMAGE_WIDTH"),
+              observed(detection.orientedImageSize.height > 0, stage: "track.sanitize", reason: "NONPOSITIVE_IMAGE_HEIGHT") else {
             return nil
         }
 
+        RecognitionTrace.current?.event("track.sanitize", ["accepted": true,
+            "boundingBox": RecognitionTrace.rect(clipped)])
         return CardDetection(
             card: detection.card,
             confidence: detection.confidence,
@@ -335,6 +388,10 @@ final class CardEventCoordinator {
     }
 
     private func update(_ track: inout Track, with detection: CardDetection, at date: Date) {
+        let trace = RecognitionTrace.current
+        let previousTrack = trace?.context["trackID"]
+        trace?.context["trackID"] = track.id.uuidString
+        defer { trace?.context["trackID"] = previousTrack }
         let oldCenter = track.box.center
         let newCenter = detection.boundingBox.center
         let elapsed = date.timeIntervalSince(track.lastSeen)
@@ -367,13 +424,36 @@ final class CardEventCoordinator {
         // A published decision is immutable. A conflicting frame may still be
         // the same moving target, but cannot change its identity or lend votes
         // to a later target. Unconfirmed tracks retain whole-label votes only.
-        guard track.confirmedVote == nil || track.confirmedVote?.label == detection.card else { return }
+        trace?.event("track.observation", ["boundingBox": RecognitionTrace.rect(track.box),
+            "velocity": RecognitionTrace.points([track.velocity]), "hitCount": track.hitCount,
+            "captureTimestamps": track.captures.sorted(), "card": detection.card.code])
+        guard track.confirmedVote == nil || track.confirmedVote?.label == detection.card else {
+            trace?.event("track.vote", ["retained": false, "reason": "PUBLISHED_IDENTITY_IMMUTABLE",
+                "card": detection.card.code, "votes": traceVotes(track.votes)])
+            return
+        }
         track.votes.append(Vote(
             label: detection.card,
             confidence: detection.confidence,
             hasIndependentSupport: detection.hasIndependentSupport
         ))
         track.votes = Array(track.votes.suffix(confirmationWindow))
+        trace?.event("track.vote", ["retained": true, "votes": traceVotes(track.votes)])
+    }
+
+    /// Preserve the original predicate's single evaluation and guard short
+    /// circuit. The observer cannot turn a failed predicate into a success.
+    private func observed(_ value: Bool, stage: String, reason: String) -> Bool {
+        if !value {
+            RecognitionTrace.current?.event(stage, ["accepted": false, "reason": reason,
+                "remainingChecks": "notEvaluated", "decisionPublished": false])
+        }
+        return value
+    }
+
+    private func traceVotes(_ votes: [Vote]) -> [[String: Any]] {
+        votes.map { ["card": $0.label.code, "confidence": $0.confidence,
+                     "hasIndependentSupport": $0.hasIndependentSupport] }
     }
 
     private func bestTrack(
@@ -381,16 +461,26 @@ final class CardEventCoordinator {
         at date: Date,
         excluding excludedIDs: Set<UUID>
     ) -> Int? {
+        RecognitionTrace.call("Coordinator.bestTrack")
+        let trace = RecognitionTrace.current
+        let previousTrack = trace?.context["trackID"]
+        defer { trace?.context["trackID"] = previousTrack }
         var best: (index: Int, score: CGFloat)?
 
         for index in tracks.indices {
             let track = tracks[index]
-            guard !track.isClosed, !excludedIDs.contains(track.id) else {
+            trace?.context["trackID"] = track.id.uuidString
+            trace?.event("track.associationInput", ["boundingBox": RecognitionTrace.rect(track.box),
+                "detection": RecognitionTrace.detections([detection]),
+                "velocity": RecognitionTrace.points([track.velocity]), "lastSeen": track.lastSeen.timeIntervalSinceReferenceDate])
+            guard observed(!track.isClosed, stage: "track.association", reason: "TRACK_CLOSED"),
+                  observed(!excludedIDs.contains(track.id), stage: "track.association", reason: "TRACK_MATCHED_THIS_CAPTURE") else {
                 continue
             }
 
             let age = date.timeIntervalSince(track.lastSeen)
-            guard age >= 0, age <= trackTimeout else { continue }
+            guard observed(age >= 0, stage: "track.association", reason: "NEGATIVE_AGE"),
+                  observed(age <= trackTimeout, stage: "track.association", reason: "TRACK_TIMEOUT") else { continue }
 
             let trackArea = max(0.0001, track.box.area)
             let detectionArea = max(0.0001, detection.boundingBox.area)
@@ -398,7 +488,10 @@ final class CardEventCoordinator {
             let maximumAreaDifference = track.hitCount == 1
                 ? maximumInitialAreaDifference
                 : maximumTrackedAreaDifference
-            guard sizeDifference <= maximumAreaDifference else { continue }
+            trace?.event("track.associationGeometry", ["age": age, "sizeDifference": sizeDifference,
+                "maximumAreaDifference": maximumAreaDifference])
+            guard observed(sizeDifference <= maximumAreaDifference,
+                           stage: "track.association", reason: "AREA_DISCONTINUITY") else { continue }
 
             let predictionAge = min(age, maximumPredictionGap)
             let predictedCenter = CGPoint(
@@ -412,13 +505,17 @@ final class CardEventCoordinator {
             let overlap = predictedBox.intersectionOverUnion(with: detection.boundingBox)
             let centerDistance = predictedCenter.distance(to: detection.boundingBox.center)
             let sameLabel = (track.confirmedVote?.label ?? track.votes.last?.label) == detection.card
+            trace?.event("track.associationMotion", ["predictedBox": RecognitionTrace.rect(predictedBox),
+                "overlap": overlap, "centroidDistance": centerDistance, "sameLabel": sameLabel])
             if !sameLabel {
-                guard !reversesEstablishedTrajectory(track, toward: detection.boundingBox) else { continue }
+                guard observed(!reversesEstablishedTrajectory(track, toward: detection.boundingBox),
+                               stage: "track.association", reason: "TRAJECTORY_REVERSED") else { continue }
                 // Labels are observations, not physical identity. Permit tight
                 // continuity before confirmation too, so 10c/9c/10c remains
                 // one track. A trajectory break still starts a separate pass.
-                guard age <= 0.09,
-                      overlap >= 0.5 || centerDistance <= 0.025 else { continue }
+                guard observed(age <= 0.09, stage: "track.association", reason: "LABEL_CHANGE_AGE"),
+                      observed(overlap >= 0.5 || centerDistance <= 0.025,
+                               stage: "track.association", reason: "LABEL_CHANGE_DISCONTINUITY") else { continue }
             }
 
             let distanceGate: CGFloat
@@ -426,13 +523,14 @@ final class CardEventCoordinator {
                 // Keep the existing fast-motion bridge for adjacent captures.
                 // Slower sampled captures may link up to 250 ms later, but
                 // only with tight spatial and size continuity.
-                guard age <= initialLinkWindow else { continue }
+                guard observed(age <= initialLinkWindow, stage: "track.association", reason: "INITIAL_LINK_EXPIRED") else { continue }
                 if age <= wideInitialLinkWindow {
                     distanceGate = min(0.45, max(0.20, track.box.diagonal * 1.80 + 0.08))
                 } else {
-                    guard sizeDifference <= 0.35 else { continue }
+                    guard observed(sizeDifference <= 0.35, stage: "track.association", reason: "SLOW_INITIAL_AREA_DISCONTINUITY") else { continue }
                     distanceGate = min(0.10, max(0.025, track.box.diagonal * 0.35))
-                    guard overlap >= 0.34 || centerDistance <= distanceGate else { continue }
+                    guard observed(overlap >= 0.34 || centerDistance <= distanceGate,
+                                   stage: "track.association", reason: "SLOW_INITIAL_SPATIAL_DISCONTINUITY") else { continue }
                 }
             } else {
                 let predictedDistance = track.box.diagonal * 0.95
@@ -440,29 +538,43 @@ final class CardEventCoordinator {
                 distanceGate = min(0.42, max(0.18, predictedDistance))
             }
 
-            guard overlap >= minimumOverlap || centerDistance <= distanceGate else { continue }
+            trace?.event("track.associationDistance", ["distanceGate": distanceGate, "minimumOverlap": minimumOverlap])
+            guard observed(overlap >= minimumOverlap || centerDistance <= distanceGate,
+                           stage: "track.association", reason: "SPATIAL_DISCONTINUITY") else { continue }
 
             let score = overlap * 2.5 - centerDistance * 1.10 - sizeDifference * 0.25
                 + (sameLabel ? 0.01 : 0)
+            trace?.event("track.association", ["accepted": true, "associationScore": score])
             if best == nil || score > best!.score {
                 best = (index, score)
             }
         }
 
+        trace?.context["trackID"] = previousTrack
+        trace?.event("track.associationSelected", [
+            "selectedTrackID": best.map { tracks[$0.index].id.uuidString as Any } ?? NSNull(),
+            "associationScore": best.map { $0.score as Any } ?? NSNull(),
+            "status": best == nil ? "newTrackRequired" : "linked"])
         return best?.index
     }
 
     private func stableCard(
         in votes: [Vote]
     ) -> (card: CardFace, confidence: Float, hasIndependentSupport: Bool)? {
+        RecognitionTrace.call("Coordinator.stableCard")
+        let trace = RecognitionTrace.current
+        trace?.event("track.stabilityInput", ["votes": traceVotes(votes)])
         if votes.count == 1, let vote = votes.first {
-            guard vote.hasIndependentSupport,
-                  vote.confidence >= minimumSupportedSingleFrameConfidence else {
+            guard observed(vote.hasIndependentSupport, stage: "track.stability", reason: "SINGLE_FRAME_NO_INDEPENDENT_SUPPORT"),
+                  observed(vote.confidence >= minimumSupportedSingleFrameConfidence,
+                           stage: "track.stability", reason: "SINGLE_FRAME_CONFIDENCE_TOO_LOW") else {
                 return nil
             }
+            trace?.event("track.stability", ["accepted": true, "card": vote.label.code,
+                "confidence": vote.confidence, "support": "singleFrameIndependent"])
             return (vote.label, vote.confidence, true)
         }
-        guard votes.count >= requiredMatchingVotes else { return nil }
+        guard observed(votes.count >= requiredMatchingVotes, stage: "track.stability", reason: "INSUFFICIENT_MATCHING_VOTES") else { return nil }
 
         let grouped = Dictionary(grouping: votes, by: \.label)
         let candidates = grouped
@@ -478,8 +590,12 @@ final class CardEventCoordinator {
                 return lhsConfidence > rhsConfidence
             }
 
+        trace?.event("track.consensus", ["candidates": candidates.map {
+            ["card": $0.card.code, "voteCount": $0.votes.count, "votes": traceVotes($0.votes)] as [String: Any]
+        }])
         guard let winner = candidates.first,
-              winner.votes.count >= requiredMatchingVotes else {
+              observed(winner.votes.count >= requiredMatchingVotes,
+                       stage: "track.stability", reason: "WINNER_INSUFFICIENT_VOTES") else {
             return nil
         }
 
@@ -489,11 +605,19 @@ final class CardEventCoordinator {
         // is safer than putting a wrong face in the magic history.
         if let runner = candidates.dropFirst().first,
            winner.votes.count <= runner.votes.count {
+            trace?.event("track.stability", ["accepted": false, "reason": "VOTE_TIE",
+                "winner": winner.card.code, "runner": runner.card.code,
+                "winnerVotes": winner.votes.count, "runnerVotes": runner.votes.count])
             return nil
         }
 
         let confidence = winner.votes.map(\.confidence).reduce(0, +) / Float(winner.votes.count)
-        guard confidence >= minimumConfirmedConfidence else { return nil }
+        trace?.event("track.consensusConfidence", ["card": winner.card.code, "confidence": confidence,
+            "minimumConfirmedConfidence": minimumConfirmedConfidence])
+        guard observed(confidence >= minimumConfirmedConfidence,
+                       stage: "track.stability", reason: "CONSENSUS_CONFIDENCE_TOO_LOW") else { return nil }
+        trace?.event("track.stability", ["accepted": true, "card": winner.card.code,
+            "confidence": confidence, "support": "multipleCaptures"])
         return (winner.card, confidence, winner.votes.contains { $0.hasIndependentSupport })
     }
 
@@ -518,11 +642,22 @@ final class CardEventCoordinator {
     /// history. A real next card normally arrives after the previous one has
     /// left the frame, so its older conflicting track is already stale.
     private func hasUnresolvedLabelConflict(for track: Track, at date: Date) -> Bool {
+        let trace = RecognitionTrace.current
+        let previousPurpose = trace?.context["trackPurpose"]
+        trace?.context["trackPurpose"] = "unresolvedLabelConflict"
+        defer { trace?.context["trackPurpose"] = previousPurpose }
         guard let stableTrackCard = stableCard(in: track.votes)?.card else {
             return false
         }
 
         return tracks.contains { other in
+            let previousTrack = trace?.context["trackID"]
+            trace?.context["trackID"] = other.id.uuidString
+            trace?.context["conflictSubjectTrackID"] = track.id.uuidString
+            defer {
+                trace?.context["trackID"] = previousTrack
+                trace?.context.removeValue(forKey: "conflictSubjectTrackID")
+            }
             guard other.id != track.id,
                   !other.isClosed,
                   !other.wasRecorded,
@@ -531,7 +666,7 @@ final class CardEventCoordinator {
                   date.timeIntervalSince(other.lastSeen) <= unresolvedLabelConflictWindow else {
                 return false
             }
-            return describesSamePass(
+            let samePass = describesSamePass(
                 box: track.box,
                 velocity: track.velocity,
                 at: date,
@@ -539,6 +674,9 @@ final class CardEventCoordinator {
                 otherVelocity: other.velocity,
                 otherDate: other.lastSeen
             )
+            trace?.event("track.labelConflict", ["conflict": samePass,
+                "subjectCard": stableTrackCard.code, "otherCard": stableOtherCard.code])
+            return samePass
         }
     }
 
@@ -548,7 +686,7 @@ final class CardEventCoordinator {
             guard elapsed >= 0, elapsed <= recentPassGuardWindow else { return false }
             if let prior = tracks.first(where: { $0.id == recent.trackID }),
                prior.isClosed || reversesEstablishedTrajectory(prior, toward: track.box) { return false }
-            return describesSamePass(
+            let samePass = describesSamePass(
                 box: track.box,
                 velocity: track.velocity,
                 at: date,
@@ -556,6 +694,9 @@ final class CardEventCoordinator {
                 otherVelocity: recent.velocity,
                 otherDate: recent.date
             )
+            RecognitionTrace.current?.event("track.recentPassConflict", ["conflict": samePass,
+                "recentTrackID": recent.trackID.uuidString, "elapsed": elapsed])
+            return samePass
         }
     }
 

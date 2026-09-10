@@ -39,6 +39,12 @@ struct ContentView: View {
                     // has a stable 44pt hit area on iPhone 14 Pro.
                     calculatorEntry
 
+                    if RecognitionTraceConfiguration.available {
+                        RecognitionLiveTraceView(text: viewModel.traceText,
+                            updatedAt: viewModel.traceUpdatedAt, exportText: viewModel.traceExportText,
+                            scanning: viewModel.isScanning || viewModel.isPreparing)
+                    }
+
                     Spacer(minLength: 0)
 
                     recordsDrawer(
