@@ -195,6 +195,83 @@ final class Phase1DiagnosticsIntegrationTests: XCTestCase {
         XCTAssertEqual(summary.decisions.first?.card, card.code)
     }
 
+    func testResetBetweenCameraCallbackAndSubmitReportsBoundaryFrame() throws {
+        let pipeline = ScanPipeline(recognizer: { _, _ in [] })
+        defer { pipeline.stop() }
+        let summaries = Locked<[Phase1DebugSummary]>([])
+        let exported = expectation(description: "both boundary sessions exported")
+        exported.expectedFulfillmentCount = 2
+        pipeline.onDebugSummary = { summary in
+            summaries.update { $0.append(summary) }
+            exported.fulfill()
+        }
+        let oldID = pipeline.start()
+        waitUntilReady(pipeline)
+        let callback = try XCTUnwrap(pipeline.cameraCallbackBegan(timestamp: 100))
+        let newID = try XCTUnwrap(pipeline.resetRecordedState())
+        waitUntilReady(pipeline)
+        pipeline.submit(pixelBuffer: try buffer(0), timestamp: 100, orientation: .up, cameraCounted: true)
+        waitUntilReady(pipeline)
+        callback(0.001)
+        pipeline.stop()
+        wait(for: [exported], timeout: 2)
+        let old = try XCTUnwrap(summaries.value.first { $0.sessionID == oldID })
+        let new = try XCTUnwrap(summaries.value.first { $0.sessionID == newID })
+        XCTAssertEqual(old.cameraFrames, 1)
+        XCTAssertEqual(old.successfulSnapshots, 0)
+        XCTAssertEqual(new.cameraFrames, 0)
+        XCTAssertEqual(new.successfulSnapshots, 1)
+        XCTAssertEqual(new.cameraFramesFromOtherSessions, 1)
+        XCTAssertEqual(new.cameraTransitions.first?.sourceSessionID, oldID)
+        XCTAssertEqual(new.cameraTransitions.first?.frameID, Double(100).bitPattern)
+    }
+
+    func testRecognitionErrorWaitsForAsynchronousUIReceiptBeforeSummary() throws {
+        enum Failure: Error { case injected }
+        let card = try XCTUnwrap(CardFace.parse("10c"))
+        var invocation = 0
+        let pipeline = ScanPipeline(recognizer: { _, _ in
+            invocation += 1
+            if invocation == 2 { throw Failure.injected }
+            return [CardDetection(card: card, confidence: 0.94,
+                boundingBox: CGRect(x: 0.2, y: 0.2, width: 0.5, height: 0.6), hasIndependentSupport: true)]
+        })
+        defer { pipeline.stop() }
+        let pending = Locked<([CardRecord], DiagnosticRecordReceipt)?>(nil)
+        let delivered = expectation(description: "UI delivery has not acknowledged yet")
+        let failed = expectation(description: "next recognition failed")
+        let exported = expectation(description: "summary after UI acknowledgement")
+        let summaries = Locked<[Phase1DebugSummary]>([])
+        pipeline.onRecordsWithDiagnostics = { _, records, receipt in
+            pending.update { $0 = (records, receipt) }
+            delivered.fulfill()
+        }
+        pipeline.onError = { _, _ in failed.fulfill() }
+        pipeline.onDebugSummary = { summary in
+            summaries.update { $0.append(summary) }
+            exported.fulfill()
+        }
+        pipeline.start()
+        waitUntilReady(pipeline)
+        let image = try buffer(0)
+        pipeline.submit(pixelBuffer: image, timestamp: 100, orientation: .up)
+        wait(for: [delivered], timeout: 2)
+        waitUntilReady(pipeline)
+        pipeline.submit(pixelBuffer: image, timestamp: 101, orientation: .up)
+        wait(for: [failed], timeout: 2)
+        waitUntilReady(pipeline)
+        XCTAssertTrue(summaries.value.isEmpty)
+        let receipt = try XCTUnwrap(pending.value)
+        receipt.1.complete(accepted: receipt.0)
+        receipt.1.complete(accepted: receipt.0)
+        wait(for: [exported], timeout: 2)
+        let summary = try XCTUnwrap(summaries.value.first)
+        XCTAssertEqual(summary.reason, "recognitionError")
+        XCTAssertEqual(summary.formalRecords, 1)
+        XCTAssertEqual(summary.recognitionErrors, 1)
+        XCTAssertTrue(summary.decisions.first?.formallyRecorded == true)
+    }
+
     private func waitUntilReady(_ pipeline: ScanPipeline) {
         let ready = expectation(description: "recognition queue barrier")
         pipeline.whenReady { ready.fulfill() }

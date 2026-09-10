@@ -83,6 +83,8 @@ final class CaptureDiagnostics {
     private let recentArrivalCapacity = 512
     private var cameraFrames = 0
     private var validCameraTimestamps = 0
+    private var cameraFramesFromOtherSessions = 0
+    private var cameraTransitions: [Phase1CameraTransition] = []
     private var firstPTS: Double?
     private var lastPTS: Double?
     private var droppedFrames = 0
@@ -172,6 +174,14 @@ final class CaptureDiagnostics {
     }
 
     func cameraCallback(duration: Double) { mutate { measure("cameraCallback", duration) } }
+    func cameraTransition(frameID: UInt64, sourceSessionID: UInt64) {
+        mutate {
+            cameraFramesFromOtherSessions += 1
+            if cameraTransitions.count < max(0, limits.frames) {
+                cameraTransitions.append(Phase1CameraTransition(frameID: frameID, sourceSessionID: sourceSessionID))
+            } else { truncation.frames += 1 }
+        }
+    }
     func cameraDropped() { mutate { droppedFrames += 1 } }
     func snapshotFailed() { mutate { snapshotFailures += 1 } }
     /// Delta for the current copy attempt, not a pool lifetime total.
@@ -412,6 +422,8 @@ final class CaptureDiagnostics {
                                        finishedAt: Date(), reason: reason)
         result.cameraFrames = cameraFrames
         result.invalidCameraTimestamps = cameraFrames - validCameraTimestamps
+        result.cameraFramesFromOtherSessions = cameraFramesFromOtherSessions
+        result.cameraTransitions = cameraTransitions
         result.firstCameraTimestamp = firstPTS
         result.lastCameraTimestamp = lastPTS
         if let firstPTS, let lastPTS, lastPTS > firstPTS {

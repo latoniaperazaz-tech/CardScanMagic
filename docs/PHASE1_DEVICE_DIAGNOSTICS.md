@@ -44,7 +44,9 @@ captureWindow 数字 ID 与物理 Track UUID 是两个编号空间。一个窗�
 
 ## 统计精度、内存和线程
 
-耗时单位为 ms。Camera PTS 用于标识帧，arrival/start/end/publish 使用单调递增 system uptime 秒，不能与墙上日期直接相减。每次测试使用独立 recorder 和 UUID，停止、清空、重启均不会把旧回调写进新 recorder。
+耗时单位为 ms。Camera PTS 用于标识帧，arrival/start/end/publish 使用单调递增 system uptime 秒，不能与墙上日期直接相减。每次测试使用独立 recorder 和 UUID，旧 Recognition 完成与 Camera 耗时始终回到原 recorder。
+
+如果清空恰好发生在 Camera callback 开始与 submit 之间，原有规则可能在新识别 Session 处理该帧。报告用 `cameraFramesFromOtherSessions` 和 `cameraTransitions` 显式记录来源会话及 frameID；这一过渡帧的送达 FPS 仍归相机回调开始时的旧会话。报告还等待已经发出的 UI 记牌回调确认接收或拒绝，避免识别错误先触发结束而漏算稍后完成的正式记牌。
 
 耗时直方图覆盖完整会话，共 4096 个对数桶，桶间隔 1%，下限 0.001 ms；P50/P95 是桶上界近似值，count/max 精确。它不会只保留最后 512 次。内存每 250 ms 独立采样，不依赖识别成功；peak 是采样峰值，短于采样周期的尖峰可能遗漏。
 
@@ -62,4 +64,4 @@ Camera 只登记短时标量数据和活动计数，不等待 Recognition，不�
 
 ## 验证
 
-本地 Python 回归：60 passed，19.06 秒。Swift 全套 XCTest、Release iPhone 编译及对应 IPA 以本次 GitHub Actions 结果为准，完成后在交付报告记录 commit/run/artifact。自动化测试不是手机性能数据；本次不声称已测得实际 FPS、延迟、内存或模糊牌召回率。
+本地 Python 回归：60 passed，19.06 秒。诊断初版 f7ed774：Swift 180 项测试通过、Release iPhone 编译通过，CI 34470047717。交界情况补充后的最终 Swift 测试、编译及 IPA 以交付报告中的最终 commit/run 为准。自动化测试不是手机性能数据；本次不声称已测得实际 FPS、延迟、内存或模糊牌召回率。

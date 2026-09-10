@@ -40,6 +40,11 @@ struct Phase1DebugFrame: Codable {
     var snapshotHeight: Int
 }
 
+struct Phase1CameraTransition: Codable {
+    let frameID: UInt64
+    let sourceSessionID: UInt64
+}
+
 struct Phase1DebugRecognition: Codable {
     let frameID: UInt64
     let timestamp: Double
@@ -109,6 +114,8 @@ struct Phase1DebugSummary: Codable {
     var reason: String
     var cameraFrames = 0
     var invalidCameraTimestamps = 0
+    var cameraFramesFromOtherSessions = 0
+    var cameraTransitions: [Phase1CameraTransition] = []
     var averageFPS: Double = 0
     var firstCameraTimestamp: Double?
     var lastCameraTimestamp: Double?
@@ -157,6 +164,7 @@ struct Phase1DebugSummary: Codable {
     var eventOutcomeCountsScope = "retained events; complete when event/recognition metadata is not truncated"
     var notes = [
         "Camera PTS identifies captures; arrival/start/end/publish use monotonic system uptime in seconds.",
+        "A reset between callback start and submit can assign camera delivery and processing to different sessions under the unchanged pipeline rules. cameraFramesFromOtherSessions and cameraTransitions identify these boundary frames; they are excluded from this run's delivered Camera FPS.",
         "FPS = (delivered frames with valid PTS - 1) / (last camera PTS - first camera PTS), including snapshot failures. Invalid PTS frames are counted separately.",
         "Latency quantiles cover the full session using 4096 logarithmic buckets, 1% spacing from 0.001 ms. Count and max are exact; p50/p95 are upper bucket approximations.",
         "recognitionResults counts completed frames with at least one raw detection; recognitionCompletions also includes empty results. Rejected session results are retained for diagnostics.",
@@ -177,6 +185,7 @@ struct Phase1DebugSummary: Codable {
     var text: String {
         var lines = ["## TEST SESSION", "runID = \(runID.uuidString)", "sessionID = \(sessionID)",
                      "reason = \(reason)", "cameraFrames = \(cameraFrames)",
+                     "cameraFramesFromOtherSessions = \(cameraFramesFromOtherSessions)",
                      String(format: "averageFPS = %.2f", averageFPS), "droppedFrames = \(droppedFrames)", "",
                      "motionTriggers = \(motionTriggers)", "motionActiveSamples = \(motionActiveSamples)",
                      "captureEvents = \(captureEvents)", "eventsWithUsableFrames = \(eventsWithUsableFrames)",

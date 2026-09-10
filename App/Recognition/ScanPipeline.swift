@@ -6,6 +6,7 @@ final class ScanPipeline {
     typealias SessionID = ScanSessionGate.SessionID
     typealias Recognizer = (CVPixelBuffer, CGImagePropertyOrientation) throws -> [CardDetection]
     var onRecords: ((SessionID, [CardRecord]) -> Void)?
+    var onRecordsWithDiagnostics: ((SessionID, [CardRecord], DiagnosticRecordReceipt) -> Void)?
     var onDetections: ((SessionID, [CardDetection]) -> Void)?
     var onError: ((SessionID, Error) -> Void)?
     var onDecisions: ((SessionID, [CardPassDecision]) -> Void)?
@@ -22,6 +23,7 @@ final class ScanPipeline {
     private let diagnosticsLock = NSLock()
     private var diagnosticRuns: [SessionID: CaptureDiagnostics] = [:]
     private var activeDiagnostics: CaptureDiagnostics?
+    private var cameraOwners: [UInt64: SessionID] = [:]
     private let configuration: CaptureConfiguration
     private let injectedRecognizer: Recognizer?
     private var engine: RecognitionEngine?
@@ -89,6 +91,14 @@ final class ScanPipeline {
         let diagnostics = candidate?.beginActivity() == true ? candidate : nil
         defer { diagnostics?.endActivity() }
         if !cameraCounted { diagnostics?.cameraFrame(timestamp: timestamp) }
+        if cameraCounted {
+            diagnosticsLock.lock()
+            let cameraOwner = cameraOwners[timestamp.bitPattern]
+            diagnosticsLock.unlock()
+            if let cameraOwner, cameraOwner != sessionID {
+                diagnostics?.cameraTransition(frameID: timestamp.bitPattern, sourceSessionID: cameraOwner)
+            }
+        }
         let measurement = motion.measure(pixelBuffer, generation: sessionID)
         diagnostics?.motion(duration: measurement.duration, triggered: measurement.triggered)
         guard let image = snapshotPool.copy(pixelBuffer, orientation: orientation,
@@ -162,7 +172,13 @@ final class ScanPipeline {
                         print("[CardEventDecision] session=\(sessionID) event=\(decision.eventID) card=\(decision.record.card.code) duplicateCard=\(decision.duplicateCard) captures=\(decision.captureTimestamps.sorted())")
                     }
                 }
-                if !update.records.isEmpty { self.onRecords?(sessionID, update.records) }
+                if !update.records.isEmpty {
+                    if let deliver = self.onRecordsWithDiagnostics {
+                        deliver(sessionID, update.records, DiagnosticRecordReceipt(diagnostics))
+                    } else {
+                        self.onRecords?(sessionID, update.records)
+                    }
+                }
             } catch {
                 diagnostics?.recognitionFailed(frameID: frame.id, at: ProcessInfo.processInfo.systemUptime,
                                                error: error.localizedDescription)
@@ -189,11 +205,19 @@ final class ScanPipeline {
         diagnosticsLock.lock()
         let run = activeDiagnostics
         let accepted = run?.beginActivity() == true
+        if accepted, let run { cameraOwners[timestamp.bitPattern] = run.sessionID }
         diagnosticsLock.unlock()
         guard accepted, let run else { return nil }
         run.cameraFrame(timestamp: timestamp)
-        return { duration in
+        return { [weak self] duration in
             run.cameraCallback(duration: duration)
+            if let self {
+                self.diagnosticsLock.lock()
+                if self.cameraOwners[timestamp.bitPattern] == run.sessionID {
+                    self.cameraOwners.removeValue(forKey: timestamp.bitPattern)
+                }
+                self.diagnosticsLock.unlock()
+            }
             run.endActivity()
         }
     }

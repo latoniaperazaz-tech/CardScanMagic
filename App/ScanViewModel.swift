@@ -44,8 +44,10 @@ final class ScanViewModel: ObservableObject {
                 self.statusText = "扫描中 · \(frameRate) fps"
             }
         }
-        pipeline.onRecords = { [weak self] sessionID, newRecords in
+        pipeline.onRecordsWithDiagnostics = { [weak self] sessionID, newRecords, receipt in
             Task { @MainActor in
+                var accepted: [CardRecord] = []
+                defer { receipt.complete(accepted: accepted) }
                 guard let self,
                       self.isScanning,
                       self.activeSessionID == sessionID else {
@@ -59,9 +61,8 @@ final class ScanViewModel: ObservableObject {
                 let uniqueRecords = self.uniqueRecords(from: newRecords)
                 let remaining = max(0, Self.cardsPerRound - self.records.count)
                 if remaining > 0 {
-                    let accepted = Array(uniqueRecords.prefix(remaining))
+                    accepted = Array(uniqueRecords.prefix(remaining))
                     self.records.append(contentsOf: accepted)
-                    self.pipeline.recordFormalRecords(accepted, sessionID: sessionID)
                 }
 
                 if self.records.count >= Self.cardsPerRound {
