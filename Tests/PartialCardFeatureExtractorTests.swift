@@ -63,6 +63,7 @@ final class PartialCardFeatureExtractorTests: XCTestCase {
         let features = try PartialCardFeatureExtractor().extract(image: image)
         let feature = try XCTUnwrap(features.first(where: { $0.visibleRegion == "left" }))
         XCTAssertEqual(feature.pipCenters.count, 3)
+        XCTAssertFalse(feature.clippedPipCandidates.isEmpty)
     }
 
     func testMildBlurredFrameThroughFusionRecordsOneSupportedCard() throws {

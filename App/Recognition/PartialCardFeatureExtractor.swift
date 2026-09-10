@@ -21,6 +21,9 @@ struct PartialCardFeatures {
     var bodyPipCount = 0
     /// Normalized x-right/y-down crop regions; not claims of hand identity.
     var uncertainRegions: [CGRect] = []
+    /// Retained ink fragments whose centroid is biased by the image boundary.
+    /// Their center is not an established physical pip center for topology.
+    var clippedPipCandidates: [CGPoint] = []
 }
 
 /// Serialized by RecognitionEngine. Coordinates follow Vision for boxes and
@@ -154,7 +157,8 @@ final class PartialCardFeatureExtractor {
             guard !pips.isEmpty || rank.text != nil else { continue }
             let aspectRatio = Double(raster.width) / Double(raster.height)
             let bodyPips = pips.filter {
-                !Self.isCornerIndex($0.center, aspectRatio: aspectRatio, region: candidate.region)
+                !$0.isClipped
+                    && !Self.isCornerIndex($0.center, aspectRatio: aspectRatio, region: candidate.region)
             }
             // Corner glyphs cannot supply the only suit evidence for a body
             // topology. OCR still uses the existing combined suit path.
@@ -182,7 +186,8 @@ final class PartialCardFeatureExtractor {
                 pipStructureConfidence: structure,
                 bodySuitSupportingPips: supporting,
                 bodyPipCount: bodyPips.count,
-                uncertainRegions: uncertainRegions
+                uncertainRegions: uncertainRegions,
+                clippedPipCandidates: pips.filter(\.isClipped).map(\.center)
             ))
         }
         return results
