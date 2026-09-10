@@ -2,6 +2,11 @@ import XCTest
 @testable import CardScanMagic
 
 final class Phase1DebugExporterTests: XCTestCase {
+    func testAppBundleAllowsUsersToRetrieveDiagnosticReports() {
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "UIFileSharingEnabled") as? Bool, true)
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "LSSupportsOpeningDocumentsInPlace") as? Bool, true)
+    }
+
     func testWritesDecodableJSONAndReadableTextWithLatestCopies() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
