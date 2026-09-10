@@ -24,12 +24,13 @@ final class ScanViewModel: ObservableObject {
 
     init() {
         camera.onDroppedFrame = { [weak self] in self?.pipeline.cameraDroppedFrame() }
-        camera.onCallbackCompleted = { [weak self] duration in self?.pipeline.cameraCallbackCompleted(duration: duration) }
+        camera.onCallbackBegan = { [weak self] timestamp in self?.pipeline.cameraCallbackBegan(timestamp: timestamp) }
         camera.onFrame = { [weak self] pixelBuffer, timestamp, orientation in
             self?.pipeline.submit(
                 pixelBuffer: pixelBuffer,
                 timestamp: timestamp,
-                orientation: orientation
+                orientation: orientation,
+                cameraCounted: true
             )
         }
         camera.onError = { [weak self] error in
@@ -58,7 +59,9 @@ final class ScanViewModel: ObservableObject {
                 let uniqueRecords = self.uniqueRecords(from: newRecords)
                 let remaining = max(0, Self.cardsPerRound - self.records.count)
                 if remaining > 0 {
-                    self.records.append(contentsOf: uniqueRecords.prefix(remaining))
+                    let accepted = Array(uniqueRecords.prefix(remaining))
+                    self.records.append(contentsOf: accepted)
+                    self.pipeline.recordFormalRecords(accepted, sessionID: sessionID)
                 }
 
                 if self.records.count >= Self.cardsPerRound {

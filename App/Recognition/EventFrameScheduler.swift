@@ -5,13 +5,17 @@ import Foundation
 /// after ingest/take return. The generic value is normally a compact owned image.
 final class EventFrameScheduler<Value> {
     struct Statistics {
+        let generation: UInt64
         let retainedFrames: Int
         let pendingEventFrames: Int
         let pendingBaselineFrames: Int
         let triggeredEvents: Int
         let completedEvents: Int
         let missingPreFrames: Int
+        /// Pending-frame evictions caused by capacity overflow. This counts
+        /// frames, not whole capture windows; a trim can evict several frames.
         let droppedEventFrames: Int
+        let ringOverwrites: Int
         let replacedBaselineFrames: Int
         let dispatchedFrames: Int
         let rejectedFrames: Int
@@ -31,6 +35,7 @@ final class EventFrameScheduler<Value> {
     private var completedEvents = 0
     private var missingPreFrames = 0
     private var droppedEventFrames = 0
+    private var ringOverwrites = 0
     private var replacedBaselineFrames = 0
     private var dispatchedFrames = 0
     private var rejectedFrames = 0
@@ -43,9 +48,12 @@ final class EventFrameScheduler<Value> {
         self.maximumPendingEventFrames = max(1, maximumPendingEventFrames)
     }
 
-    func reset(generation: UInt64) {
+    /// Returns the previous generation's final counters atomically with reset.
+    @discardableResult
+    func reset(generation: UInt64) -> Statistics {
         lock.lock()
         defer { lock.unlock() }
+        let previousStatistics = makeStatistics()
         self.generation = generation
         ring.reset()
         builder.reset(generation: generation)
@@ -56,9 +64,11 @@ final class EventFrameScheduler<Value> {
         completedEvents = 0
         missingPreFrames = 0
         droppedEventFrames = 0
+        ringOverwrites = 0
         replacedBaselineFrames = 0
         dispatchedFrames = 0
         rejectedFrames = 0
+        return previousStatistics
     }
 
     @discardableResult
@@ -75,7 +85,7 @@ final class EventFrameScheduler<Value> {
         // Read before append, so a ring exactly six frames wide still supplies
         // six pre-trigger captures without losing one to the trigger itself.
         let previous = ring.history(before: frame.id, limit: builder.preFrameCount)
-        ring.append(frame)
+        if ring.append(frame) != nil { ringOverwrites += 1 }
         let wasActive = builder.activeEvent != nil
         let update = builder.ingest(frame, triggered: triggered, previousFrames: previous)
         if let event = update {
@@ -128,10 +138,17 @@ final class EventFrameScheduler<Value> {
     var statistics: Statistics {
         lock.lock()
         defer { lock.unlock() }
-        return Statistics(retainedFrames: ring.count, pendingEventFrames: pendingEventFrames.count,
+        return makeStatistics()
+    }
+
+    /// Caller holds lock, including when atomically taking pre-reset counters.
+    private func makeStatistics() -> Statistics {
+        return Statistics(generation: generation,
+                          retainedFrames: ring.count, pendingEventFrames: pendingEventFrames.count,
                           pendingBaselineFrames: baseline == nil ? 0 : 1,
                           triggeredEvents: triggeredEvents, completedEvents: completedEvents,
                           missingPreFrames: missingPreFrames, droppedEventFrames: droppedEventFrames,
+                          ringOverwrites: ringOverwrites,
                           replacedBaselineFrames: replacedBaselineFrames, dispatchedFrames: dispatchedFrames,
                           rejectedFrames: rejectedFrames)
     }

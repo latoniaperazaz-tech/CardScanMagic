@@ -29,7 +29,7 @@ final class CameraService: NSObject {
     /// this is determined per sample rather than assumed at setup time.
     var onFrame: ((CVPixelBuffer, TimeInterval, CGImagePropertyOrientation) -> Void)?
     var onDroppedFrame: (() -> Void)?
-    var onCallbackCompleted: ((TimeInterval) -> Void)?
+    var onCallbackBegan: ((TimeInterval) -> ((TimeInterval) -> Void)?)?
     var onError: ((Error) -> Void)?
     var onModeChanged: ((Int) -> Void)?
 
@@ -349,9 +349,10 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         let callbackStart = ProcessInfo.processInfo.systemUptime
-        defer { onCallbackCompleted?(ProcessInfo.processInfo.systemUptime - callbackStart) }
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+        let callbackToken = onCallbackBegan?(timestamp)
+        defer { callbackToken?(ProcessInfo.processInfo.systemUptime - callbackStart) }
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         emitDiagnostics(
             pixelBuffer: pixelBuffer,
             timestamp: timestamp,

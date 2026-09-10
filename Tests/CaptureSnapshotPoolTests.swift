@@ -3,6 +3,24 @@ import XCTest
 @testable import CardScanMagic
 
 final class CaptureSnapshotPoolTests: XCTestCase {
+    func testDiagnosticDimensionsDescribeSuccessfulOutputAfterBudgetCompaction() throws {
+        let pool = CaptureSnapshotPool(maximumDimension: 1280, minimumBufferCount: 58)
+        XCTAssertEqual(pool.statistics.maximumDimension, 1280)
+        XCTAssertEqual(pool.statistics.width, 0)
+        XCTAssertEqual(pool.statistics.height, 0)
+        let source = try buffer(width: 1920, height: 1080, format: kCVPixelFormatType_32BGRA, value: 42)
+        let image = try XCTUnwrap(pool.copy(source, orientation: .up))
+        let statistics = pool.statistics
+        XCTAssertLessThan(statistics.width, 1280, "The owner budget compacts this BGRA snapshot below the configured cap")
+        XCTAssertEqual(statistics.width, CVPixelBufferGetWidth(image.pixelBuffer))
+        XCTAssertEqual(statistics.height, CVPixelBufferGetHeight(image.pixelBuffer))
+        XCTAssertEqual(statistics.allocationFailures, 0)
+        pool.reset()
+        XCTAssertEqual(pool.statistics.width, statistics.width, "Reset retains the same pool and output format")
+        XCTAssertEqual(pool.statistics.height, statistics.height)
+        XCTAssertEqual(CVPixelBufferGetWidth(source), 1920)
+    }
+
     func testDefaultBGRABudgetContinuesAfterRingAndPendingEventsFill() throws {
         let configuration = CaptureConfiguration()
         let pool = CaptureSnapshotPool(maximumDimension: configuration.snapshotMaximumDimension,
@@ -56,14 +74,24 @@ final class CaptureSnapshotPoolTests: XCTestCase {
         let pool = CaptureSnapshotPool(maximumDimension: 320, byteLimit: budget, minimumBufferCount: 6)
         let source = try buffer(width: 320, height: 240, format: kCVPixelFormatType_32BGRA, value: 17)
         var retained = [try XCTUnwrap(pool.copy(source, orientation: .up))]
+        var allocationFailureDeltas: [Int] = []
         let capacity = pool.statistics.allocationThreshold
         for _ in 1..<capacity { retained.append(try XCTUnwrap(pool.copy(source, orientation: .up))) }
-        XCTAssertNil(pool.copy(source, orientation: .up))
+        XCTAssertNil(pool.copy(source, orientation: .up, diagnostics: { allocationFailureDeltas.append($0) }))
+        XCTAssertEqual(allocationFailureDeltas, [1], "Even failed copies report their allocation delta")
+        XCTAssertEqual(pool.statistics.failures, 1)
+        XCTAssertEqual(pool.statistics.allocationFailures, 1, "CoreVideo threshold exhaustion is an allocation failure")
         pool.reset()
+        XCTAssertEqual(pool.statistics.failures, 0)
+        XCTAssertEqual(pool.statistics.allocationFailures, 0)
         XCTAssertEqual(pool.statistics.allocationThreshold, capacity)
-        XCTAssertNil(pool.copy(source, orientation: .up), "A new session cannot allocate around old event ownership")
+        XCTAssertNil(pool.copy(source, orientation: .up, diagnostics: { allocationFailureDeltas.append($0) }),
+                     "A new session cannot allocate around old event ownership")
+        XCTAssertEqual(pool.statistics.allocationFailures, 1)
         retained.removeLast()
-        retained.append(try XCTUnwrap(pool.copy(source, orientation: .up)))
+        retained.append(try XCTUnwrap(pool.copy(source, orientation: .up, diagnostics: { allocationFailureDeltas.append($0) })))
+        XCTAssertEqual(allocationFailureDeltas, [1, 1, 0], "Attempt deltas remain correct across reset and successful reuse")
+        XCTAssertEqual(pool.statistics.allocationFailures, 1, "Successful reuse does not count as a failure")
         XCTAssertEqual(retained.count, capacity)
         XCTAssertLessThanOrEqual(pool.statistics.maximumPixelBytes, budget)
         XCTAssertEqual(try firstByte(retained[0].pixelBuffer), 17)
@@ -94,9 +122,12 @@ final class CaptureSnapshotPoolTests: XCTestCase {
         let retained = try XCTUnwrap(pool.copy(bgra, orientation: .up))
         let bound = pool.statistics.maximumPixelBytes
         XCTAssertNil(pool.copy(nv12, orientation: .up))
+        XCTAssertEqual(pool.statistics.allocationFailures, 0, "Format rejection never calls CoreVideo allocation")
         pool.reset()
         XCTAssertNil(pool.copy(nv12, orientation: .up))
         XCTAssertEqual(pool.statistics.formatChangeRejections, 1)
+        XCTAssertEqual(pool.statistics.failures, 1)
+        XCTAssertEqual(pool.statistics.allocationFailures, 0)
         XCTAssertEqual(pool.statistics.maximumPixelBytes, bound)
         XCTAssertEqual(try firstByte(retained.pixelBuffer), 11)
     }
@@ -104,9 +135,15 @@ final class CaptureSnapshotPoolTests: XCTestCase {
     func testImpossibleBudgetReturnsFailureInsteadOfPublishingUndersizedCapacity() throws {
         let pool = CaptureSnapshotPool(byteLimit: 1, minimumBufferCount: 58)
         let source = try buffer(width: 32, height: 32, format: kCVPixelFormatType_32BGRA, value: 0)
-        XCTAssertNil(pool.copy(source, orientation: .up))
+        var reportedDelta: Int?
+        XCTAssertNil(pool.copy(source, orientation: .up, diagnostics: { reportedDelta = $0 }))
+        XCTAssertEqual(reportedDelta, 0, "Pre-allocation rejection still invokes diagnostics exactly once")
         XCTAssertEqual(pool.statistics.maximumPixelBytes, 0)
         XCTAssertEqual(pool.statistics.allocationThreshold, 0)
+        XCTAssertEqual(pool.statistics.failures, 1)
+        XCTAssertEqual(pool.statistics.allocationFailures, 0, "Budget rejection occurs before CoreVideo allocation")
+        XCTAssertEqual(pool.statistics.width, 0)
+        XCTAssertEqual(pool.statistics.height, 0)
     }
 
     private func buffer(width: Int, height: Int, format: OSType, value: Int32) throws -> CVPixelBuffer {

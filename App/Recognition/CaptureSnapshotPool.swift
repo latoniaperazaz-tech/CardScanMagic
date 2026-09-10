@@ -11,7 +11,16 @@ final class CaptureSnapshotPool {
         let bytesPerBuffer: Int
         let allocationThreshold: Int
         let failures: Int
+        /// Failed CoreVideo pool creation or buffer allocation calls, including
+        /// allocation-threshold exhaustion. Excludes format, budget and scale rejection.
+        let allocationFailures: Int
         let formatChangeRejections: Int
+        let maximumDimension: Int
+        /// Actual dimensions of the last successfully copied snapshot; zero
+        /// until the first success. Budget compaction can make these smaller
+        /// than maximumDimension. A session reset keeps the same pool format.
+        let width: Int
+        let height: Int
     }
 
     private struct Format: Equatable {
@@ -29,7 +38,10 @@ final class CaptureSnapshotPool {
     private var bytesPerBuffer = 0
     private var allocationThreshold = 0
     private var failures = 0
+    private var allocationFailures = 0
     private var formatChangeRejections = 0
+    private var outputWidth = 0
+    private var outputHeight = 0
 
     init(maximumDimension: Int = 1280, byteLimit: Int = 72 * 1_024 * 1_024,
          minimumBufferCount: Int = 1) {
@@ -38,9 +50,16 @@ final class CaptureSnapshotPool {
         self.minimumBufferCount = max(1, minimumBufferCount)
     }
 
-    func copy(_ source: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> CapturedImage? {
+    /// diagnostics receives this copy attempt's allocation-failure delta under
+    /// the pool lock, including failed copies. It must not reenter the pool.
+    func copy(_ source: CVPixelBuffer, orientation: CGImagePropertyOrientation,
+              diagnostics: ((Int) -> Void)? = nil) -> CapturedImage? {
         lock.lock()
-        defer { lock.unlock() }
+        let initialAllocationFailures = allocationFailures
+        defer {
+            diagnostics?(allocationFailures - initialAllocationFailures)
+            lock.unlock()
+        }
         guard let requested = destinationFormat(source) else {
             failures += 1
             return nil
@@ -65,6 +84,7 @@ final class CaptureSnapshotPool {
             guard let pool,
                   CVPixelBufferPoolCreatePixelBufferWithAuxAttributes(kCFAllocatorDefault, pool, options, &next) == kCVReturnSuccess,
                   let next else {
+                allocationFailures += 1
                 failures += 1
                 return nil
             }
@@ -75,6 +95,8 @@ final class CaptureSnapshotPool {
             return nil
         }
         CVBufferPropagateAttachments(source, target)
+        outputWidth = CVPixelBufferGetWidth(target)
+        outputHeight = CVPixelBufferGetHeight(target)
         return CapturedImage(pixelBuffer: target, orientation: orientation, bytes: bytesPerBuffer)
     }
 
@@ -84,6 +106,7 @@ final class CaptureSnapshotPool {
         lock.lock()
         defer { lock.unlock() }
         failures = 0
+        allocationFailures = 0
         formatChangeRejections = 0
         if let pool { CVPixelBufferPoolFlush(pool, .excessBuffers) }
     }
@@ -96,7 +119,11 @@ final class CaptureSnapshotPool {
             bytesPerBuffer: bytesPerBuffer,
             allocationThreshold: allocationThreshold,
             failures: failures,
-            formatChangeRejections: formatChangeRejections
+            allocationFailures: allocationFailures,
+            formatChangeRejections: formatChangeRejections,
+            maximumDimension: maximumDimension,
+            width: outputWidth,
+            height: outputHeight
         )
     }
 
@@ -164,11 +191,17 @@ final class CaptureSnapshotPool {
         ]
         var createdPool: CVPixelBufferPool?
         guard CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attributes as CFDictionary, &createdPool) == kCVReturnSuccess,
-              let createdPool else { return nil }
+              let createdPool else {
+            allocationFailures += 1
+            return nil
+        }
         var first: CVPixelBuffer?
         let probeOptions = [kCVPixelBufferPoolAllocationThresholdKey: 1] as CFDictionary
         guard CVPixelBufferPoolCreatePixelBufferWithAuxAttributes(kCFAllocatorDefault, createdPool, probeOptions, &first) == kCVReturnSuccess,
-              let first else { return nil }
+              let first else {
+            allocationFailures += 1
+            return nil
+        }
         let bytes = Self.allocatedBytes(first)
         guard bytes > 0, bytes <= byteLimit else { return nil }
         return (createdPool, first, bytes)
