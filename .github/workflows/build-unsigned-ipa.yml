@@ -195,6 +195,22 @@ jobs:
 
           app_path="$PWD/build/DerivedData/Build/Products/Release-iphoneos/CardScanMagic.app"
           test -d "$app_path"
+          # Xcode may omit arbitrary INFOPLIST_KEY_* values. Stamp the actual
+          # unsigned product so exported Sessions always identify its source/model.
+          python3 - "$app_path/Info.plist" <<'PY'
+          import json, os, plistlib, sys
+          from pathlib import Path
+          manifest = json.loads(Path('build/RecognitionReplayModel/replay_model_manifest.json').read_text())
+          assert manifest['sourceRevision'] == os.environ['GITHUB_SHA']
+          path = Path(sys.argv[1])
+          value = plistlib.loads(path.read_bytes())
+          value['TraceSourceRevision'] = manifest['sourceRevision']
+          value['TraceModelSHA256'] = manifest['modelSHA256']
+          path.write_bytes(plistlib.dumps(value, fmt=plistlib.FMT_BINARY))
+          restored = plistlib.loads(path.read_bytes())
+          assert restored['TraceSourceRevision'] == manifest['sourceRevision']
+          assert restored['TraceModelSHA256'] == manifest['modelSHA256']
+          PY
           mkdir -p build/Payload
           cp -R "$app_path" build/Payload/
           ditto -c -k --sequesterRsrc --keepParent build/Payload build/CardScanMagic-unsigned.ipa
