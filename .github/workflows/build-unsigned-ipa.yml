@@ -141,24 +141,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 scripts/verify_recognition_trace_replay.py package-model \
+            --repository "$PWD" --output "$PWD/build/RecognitionReplayModel" \
+            --source-revision "$GITHUB_SHA"
           python3 - <<'PY'
-          import hashlib
+          import json
           from pathlib import Path
-          candidates = sorted(Path('App').rglob('CardDetector.mlpackage')) + sorted(Path('App').rglob('CardDetector.mlmodel'))
-          if len(candidates) != 1:
-              raise SystemExit('Expected exactly one bundled model for trace identity')
-          package = candidates[0]
-          digest = hashlib.sha256()
-          for item in (sorted(package.rglob('*')) if package.is_dir() else [package]):
-              if item.is_file():
-                  digest.update((item.relative_to(package).as_posix() if package.is_dir() else item.name).encode())
-                  digest.update(b'\0')
-                  digest.update(item.read_bytes())
-          if not package.exists():
-              raise SystemExit('Cannot locate bundled model for trace identity')
+          manifest = json.loads(Path('build/RecognitionReplayModel/replay_model_manifest.json').read_text())
           project = Path('project.yml')
           project.write_text(project.read_text().replace('    SWIFT_VERSION: "5.0"',
-              '    SWIFT_VERSION: "5.0"\n    INFOPLIST_KEY_TraceModelSHA256: "' + digest.hexdigest() + '"'))
+              '    SWIFT_VERSION: "5.0"\n    INFOPLIST_KEY_TraceModelSHA256: "' + manifest['modelSHA256'] + '"'))
           PY
           if ! command -v xcodegen >/dev/null 2>&1; then
             brew install xcodegen
@@ -222,4 +214,14 @@ jobs:
           name: Swift-test-results
           path: build/TraceTests.xcresult
           if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload the exact source model for strict Recognition Trace replay
+        if: inputs.recognition_trace
+        uses: actions/upload-artifact@v4
+        with:
+          name: RecognitionTrace-replay-model
+          path: build/RecognitionReplayModel/
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 14

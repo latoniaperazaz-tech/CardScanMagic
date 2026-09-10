@@ -16,7 +16,7 @@
 
 ## 暂停并导出整个 Session
 
-完成一轮后暂停扫描，保持 App 前台，等面板显示“已导出”。已有 Recognition / UI 回执和后台写盘收尾后才生成最终 manifest。不要通过强杀 App 结束测试。
+完成一轮后暂停扫描，保持 App 前台，等面板显示本轮 Session 的“已导出”。面板可能仍显示上一轮导出提示，必须核对 Session 名称，并确认对应 session_manifest.json 的 finishedAt 属于本次测试。已有 Recognition / UI 回执和后台写盘收尾后才生成最终 manifest。不要通过强杀 App 结束测试。
 
 iPhone“文件”→“浏览”→“我的 iPhone”→“计算机”→ RecognitionTrace：
 
@@ -54,7 +54,7 @@ RecognitionTrace/
 
 ## 找到 FULL / OCCLUDED 差异报告
 
-先完成并暂停 FULL 9C，再新开一轮完成 OCCLUDED 9C。两轮导出收尾后自动生成 Comparisons 下的 latest 报告和带两轮 runID 的固定报告，选择各标签最近导出的 Session；先核对报告头部两个 Session 正确。
+先完成并暂停 FULL 9C，再新开一轮完成 OCCLUDED 9C。Session 显示“已导出”之后，后台才开始生成 A/B 报告；此刻 latest 仍可能是旧文件。继续保持前台，等待 Comparisons 下同时包含本次两轮 runID 的固定报告出现，再复制整个 RecognitionTrace 文件夹。自动比较选择各标签最近导出的 Session；打开报告后核对头部两个 Session 和 runID 正确。
 
 报告包括：
 
@@ -80,7 +80,11 @@ Extractor 自己原有的 640 工作图、320 surface 图、448 candidate 上限
 
 ## 将真实失败帧放回完整 RecognitionEngine
 
-在具备 Xcode 的 Mac 上，检出与诊断包 sourceRevision 对应的源码，准备相同模型（manifest 的 modelSHA256 标识），安装项目原有依赖与 XcodeGen。完整保留一份 Recognition 目录，然后运行：
+在具备 Xcode 的 Mac 上，检出与诊断包 sourceRevision 对应的干净源码，安装项目原有依赖、Python 3 与 XcodeGen。
+
+下载与诊断 IPA 同一次 CI 构建的 **RecognitionTrace-replay-model** 附件。解压后包含 replay_model_manifest.json 和 App/Models/CardDetector.mlpackage（外部单文件模型则为 .mlmodel）；将它们按原目录结构放到工程根目录。附件就是本次实际参与编译的模型源包，避免重新导出产生不同包内容。
+
+完整保留 Session 及所选 Recognition 子目录，进入工程根目录运行：
 
 ```bash
 bash scripts/replay_recognition_trace.sh "/absolute/Session-.../Recognition-..."
@@ -92,7 +96,9 @@ bash scripts/replay_recognition_trace.sh "/absolute/Session-.../Recognition-..."
 RealFrameReplayTests/testExportedProductionInputThroughFullEngineWhenProvided
 ```
 
-测试还原 CVPixelBuffer 和 orientation，调用真正的 RecognitionEngine → Core ML / PartialCardFeatureExtractor → PartialRankEstimator → PartialEvidenceFusion，比较 Trace OFF/ON 的完整结果与调用次数，写出原目录的 replay_trace.json。
+脚本先核对 Session 索引、源码提交和 modelSHA256；不匹配会停止。测试还原 CVPixelBuffer 和 orientation，调用真正的 RecognitionEngine → Core ML / PartialCardFeatureExtractor → PartialRankEstimator → PartialEvidenceFusion，比较 Trace OFF/ON 的完整结果与调用次数，写出原目录的 replay_trace.json。
+
+脚本还会核验本次新输出的像素来源、方向、格式、Engine 完成记录和实际调用次数，成功后写 replay_verification.json。没有新文件、测试被跳过或仅残留旧文件时不会报告成功。
 
 没有实际真机目录时，该专项测试明确 SKIP；另外的完整 Engine、无损回放和观察等价测试照常执行，不 mock Pip 或 Rank。
 
