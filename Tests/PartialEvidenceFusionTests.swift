@@ -75,6 +75,18 @@ final class PartialEvidenceFusionTests: XCTestCase {
         XCTAssertTrue(fuse(local: [evidence(layout: invented)]).isEmpty)
     }
 
+    func testUnqualifiedInkLayoutCannotVetoCoreMLOrValidLocalCard() {
+        let blocks = evidence(rank: "9", suitConfidence: 0.1, bodySuitSupportingPips: 0)
+        XCTAssertTrue(fuse(local: [blocks]).isEmpty)
+        XCTAssertEqual(fuse(model: [detection("5d", confidence: 0.95)], local: [blocks])
+            .map { $0.card.code }, ["5d"])
+        XCTAssertEqual(fuse(local: [blocks, evidence()]).map { $0.card.code }, ["5d"])
+        XCTAssertEqual(fuse(local: [evidence(), blocks]).map { $0.card.code }, ["5d"])
+        let oneClub = evidence(rank: "9", suit: "club", bodySuitSupportingPips: 1)
+        XCTAssertEqual(fuse(model: [detection("5d", confidence: 0.95)], local: [oneClub])
+            .map { $0.card.code }, ["5d"])
+    }
+
     func testPipOnlyRejectsInvalidOrFlatTopologyDistribution() {
         let ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
         for probability in [0.1, 0.5, Double.nan] {

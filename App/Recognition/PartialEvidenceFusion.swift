@@ -31,17 +31,21 @@ enum PartialEvidenceFusion {
         // A later crop must be able to veto an earlier crop's provisional face.
         let vetoedRegions = usableLocal.indices.compactMap { index -> CGRect? in
             let evidence = usableLocal[index]
+            let conflictRank = qualifiedConflictRank(evidence)
+            let conflictSuit = qualifiedConflictSuit(evidence)
             let modelConflict = usableModel.contains { detection in
                 detection.confidence >= 0.80 && overlaps(detection.boundingBox, evidence.box)
-                    && ((evidence.rank != nil && detection.card.rank != evidence.rank)
-                        || (evidence.suit != nil && detection.card.suit != evidence.suit))
+                    && ((conflictRank != nil && detection.card.rank != conflictRank)
+                        || (conflictSuit != nil && detection.card.suit != conflictSuit))
             }
             let localConflict = usableLocal.indices.contains { otherIndex in
                 guard index != otherIndex else { return false }
                 let other = usableLocal[otherIndex]
                 guard overlaps(evidence.box, other.box) else { return false }
-                return (evidence.rank != nil && other.rank != nil && evidence.rank != other.rank)
-                    || (evidence.suit != nil && other.suit != nil && evidence.suit != other.suit)
+                let otherRank = qualifiedConflictRank(other)
+                let otherSuit = qualifiedConflictSuit(other)
+                return (conflictRank != nil && otherRank != nil && conflictRank != otherRank)
+                    || (conflictSuit != nil && otherSuit != nil && conflictSuit != otherSuit)
             }
             return evidence.hasRankConflict || modelConflict || localConflict ? evidence.box : nil
         }
@@ -178,6 +182,24 @@ enum PartialEvidenceFusion {
         let partialRegions: Set<String> = ["left", "right", "top", "bottom", "center",
             "top_left", "top_right", "bottom_left", "bottom_right"]
         return count >= 3 && partialRegions.contains(features.visibleRegion)
+    }
+
+    /// Retaining ordinary ink components must not give unqualified layout
+    /// guesses the power to veto a working Core ML or another local result.
+    private static func qualifiedConflictRank(_ evidence: ResolvedEvidence) -> String? {
+        if let text = evidence.textRank { return text }
+        return hasPipTopologyEvidence(evidence) ? evidence.layoutRank : nil
+    }
+
+    private static func qualifiedConflictSuit(_ evidence: ResolvedEvidence) -> CardFace.Suit? {
+        if evidence.textRank != nil { return evidence.suit }
+        let features = evidence.source.features
+        let count = distinctPipCount(features.pipCenters)
+        guard count > 0, count == features.bodyPipCount,
+              features.bodySuitSupportingPips >= min(count, 3),
+              features.bodySuitSupportingPips <= count,
+              Double(features.bodySuitSupportingPips) / Double(count) >= 0.60 else { return nil }
+        return evidence.suit
     }
 
     private static func parseSuit(_ value: String) -> CardFace.Suit? {
