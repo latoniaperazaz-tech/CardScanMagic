@@ -135,6 +135,7 @@ final class PartialCardFeatureExtractorTests: XCTestCase {
     func testRedInkWithoutSuitShapeDoesNotClaimCertainSuit() throws {
         let features = try PartialCardFeatureExtractor().extract(image: makeImage(squareInk: true))
         XCTAssertTrue(features.allSatisfy { $0.suitConfidence < 0.6 })
+        XCTAssertTrue(features.contains { !$0.pipCenters.isEmpty })
     }
 
     func testVisibleRegionMapsImageClippingToRemainingCardSide() {

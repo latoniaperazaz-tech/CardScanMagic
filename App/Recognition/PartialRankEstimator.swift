@@ -54,6 +54,9 @@ enum PartialRankEstimator {
     private struct Score {
         var value = 0.0
         var matchedCount = 0
+        var visibleMissingCount = 0
+        var uncertainMissingCount = 0
+        var matchQuality = 0.0
     }
 
     private static let templates: [Template] = [
@@ -71,14 +74,26 @@ enum PartialRankEstimator {
 
     /// Input points use x-right/y-down coordinates within the upright image crop.
     /// Region hints refer to which part of the card is visible, not image quadrants.
+    /// Uncertain rectangles use the same normalized crop coordinates as the points.
+    /// A surface anchor requires a complete, upright, geometrically located card;
+    /// it supplies the card coordinate system independently of the detected pips.
     static func infer(
         points: [CGPoint],
         imageAspectRatio: Double,
-        visibleRegion: String = "unknown"
+        visibleRegion: String = "unknown",
+        uncertainRegions: [CGRect] = [],
+        surfaceAnchored: Bool = false
     ) -> PartialRankResult {
         guard imageAspectRatio.isFinite, imageAspectRatio > 0 else { return emptyResult() }
         let viewport = Point(x: min(imageAspectRatio, 1), y: min(1 / imageAspectRatio, 1))
         let region = normalizedRegion(visibleRegion)
+        let uncertainty = uncertainRegions.compactMap { rect -> CGRect? in
+            let value = rect.standardized
+            guard value.minX.isFinite, value.minY.isFinite, value.maxX.isFinite, value.maxY.isFinite,
+                  value.width > 0, value.height > 0 else { return nil }
+            let clipped = value.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+            return clipped.isNull || clipped.isEmpty ? nil : clipped
+        }
         var observed: [Point] = []
         for point in points.prefix(64) {
             let x = Double(point.x)
@@ -92,7 +107,15 @@ enum PartialRankEstimator {
         guard !observed.isEmpty else { return emptyResult() }
         // Canonical order makes the capped hypothesis search independent of detector ordering.
         observed.sort { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
-        let scores = templates.map { bestScore(template: $0, observed: observed, viewport: viewport, region: region) }
+        let hasSurfaceAnchor = surfaceAnchored && region == "full"
+        let scores = templates.map { template in
+            if hasSurfaceAnchor {
+                return anchoredScore(template: template, observed: observed, viewport: viewport,
+                                     uncertainRegions: uncertainty)
+            }
+            return bestScore(template: template, observed: observed, viewport: viewport,
+                             region: region, uncertainRegions: uncertainty)
+        }
         let maximum = scores.map(\.value).max() ?? 0
         let temperature = observed.count >= 4 ? 0.065 : 0.085
         let weights = scores.map { exp(($0.value - maximum) / temperature) }
@@ -112,15 +135,30 @@ enum PartialRankEstimator {
         let margin = best.probability - candidates[1].probability
         let centeredFullAce = observed.count == 1 && region == "full" && best.rank == "A"
             && hypot(observed[0].x / viewport.x - 0.5, observed[0].y / viewport.y - 0.5) < 0.12
-        let support = centeredFullAce ? 0.75 : min(1, Double(observed.count) / 3)
+        let bestIndex = templates.firstIndex { $0.rank == best.rank }!
+        let winningScore = scores[bestIndex]
+        // One or two pips cannot locate a card on their own. A separately
+        // established surface can: its visible empty positions distinguish
+        // A/2 from larger layouts without fabricating additional observed pips.
+        let anchoredSupport = hasSurfaceAnchor && winningScore.matchedCount == observed.count
+            && winningScore.visibleMissingCount == 0 && winningScore.matchQuality >= 0.85
+        let support = anchoredSupport ? 1 : (centeredFullAce ? 0.75 : min(1, Double(observed.count) / 3))
         let confidence = min(1, support * (0.52 * best.score + 0.30 * best.probability + 0.18 * min(1, margin * 4)))
+        // If all distinguishing pips could be hidden, structural preferences
+        // must not turn that missing information into a specific rank.
+        let ambiguousOcclusion = !uncertainty.isEmpty && scores.enumerated().contains { index, score in
+            index != bestIndex && score.matchedCount == observed.count
+                && score.visibleMissingCount == 0 && score.matchQuality >= 0.85
+                && (score.uncertainMissingCount > 0 || winningScore.uncertainMissingCount > 0)
+        }
         // Similarity fits can explain coincident subsets of multiple ranks. A ranked
         // candidate alone is not evidence that a blurred or partial card is resolved.
-        let resolved = centeredFullAce || (
-            observed.count >= 2 && best.matchedCount == observed.count && best.score >= 0.72
+        let resolved = !ambiguousOcclusion && ((centeredFullAce && !hasSurfaceAnchor && uncertainty.isEmpty) || (
+            (observed.count >= 2 || (anchoredSupport && best.rank == "A"))
+                && best.matchedCount == observed.count && best.score >= 0.72
                 && confidence >= 0.52 && best.probability >= 0.27 && margin >= 0.055
                 && (observed.count >= 3 || (region == "full" && best.probability >= 0.42))
-        )
+        ))
         return PartialRankResult(rank: resolved ? best.rank : nil, confidence: confidence, candidates: candidates)
     }
 
@@ -140,7 +178,8 @@ enum PartialRankEstimator {
                 "bottom_left", "bottom_right", "center"].contains(value) ? value : "unknown"
     }
 
-    private static func bestScore(template: Template, observed: [Point], viewport: Point, region: String) -> Score {
+    private static func bestScore(template: Template, observed: [Point], viewport: Point,
+                                  region: String, uncertainRegions: [CGRect]) -> Score {
         var best = Score()
         if observed.count < 2 || template.points.count < 2 {
             for source in template.points {
@@ -154,7 +193,8 @@ enum PartialRankEstimator {
                                 tx: target.x - a * source.x * cardAspect + b * source.y,
                                 ty: target.y - b * source.x * cardAspect - a * source.y, plausibility: 0.52)
                             let score = score(template: template, observed: observed, viewport: viewport,
-                                              transform: transform, region: region)
+                                              transform: transform, region: region,
+                                              uncertainRegions: uncertainRegions)
                             if score.value > best.value { best = score }
                         }
                     }
@@ -184,12 +224,31 @@ enum PartialRankEstimator {
                                 targetB: observed[reverse ? targetA : targetB]
                             ) else { continue }
                             let score = score(template: template, observed: observed, viewport: viewport,
-                                              transform: transform, region: region)
+                                              transform: transform, region: region,
+                                              uncertainRegions: uncertainRegions)
                             if score.value > best.value { best = score }
                         }
                     }
                 }
             }
+        }
+        return best
+    }
+
+    private static func anchoredScore(template: Template, observed: [Point], viewport: Point,
+                                      uncertainRegions: [CGRect]) -> Score {
+        var best = Score()
+        // The card is already upright and rectified. Both ends are valid,
+        // including the asymmetric extra pip on a seven.
+        for upsideDown in [false, true] {
+            let projected = template.points.map { point in
+                Point(x: (upsideDown ? 1 - point.x : point.x) * viewport.x,
+                      y: (upsideDown ? 1 - point.y : point.y) * viewport.y)
+            }
+            let candidate = score(template: template, observed: observed, viewport: viewport,
+                                  projected: projected, plausibility: 1, region: "full",
+                                  uncertainRegions: uncertainRegions)
+            if candidate.value > best.value { best = candidate }
         }
         return best
     }
@@ -213,8 +272,17 @@ enum PartialRankEstimator {
     }
 
     private static func score(template: Template, observed: [Point], viewport: Point,
-                              transform: Transform, region: String) -> Score {
+                              transform: Transform, region: String,
+                              uncertainRegions: [CGRect]) -> Score {
         let projected = template.points.map { transform.apply($0) }
+        return score(template: template, observed: observed, viewport: viewport,
+                     projected: projected, plausibility: transform.plausibility,
+                     region: region, uncertainRegions: uncertainRegions)
+    }
+
+    private static func score(template: Template, observed: [Point], viewport: Point,
+                              projected: [Point], plausibility: Double, region: String,
+                              uncertainRegions: [CGRect]) -> Score {
         var possible: [Match] = []
         for (observedIndex, point) in observed.enumerated() {
             for (templateIndex, target) in projected.enumerated() {
@@ -238,14 +306,22 @@ enum PartialRankEstimator {
         }
         let margin = tolerance * 0.4
         var visibleMask = 0
+        var uncertainMask = 0
         for (index, point) in projected.enumerated() where point.x >= -margin && point.y >= -margin
             && point.x <= viewport.x + margin && point.y <= viewport.y + margin {
             visibleMask |= 1 << index
+            if isUncertain(point, viewport: viewport, regions: uncertainRegions) {
+                uncertainMask |= 1 << index
+            }
         }
-        let visibleCount = visibleMask.nonzeroBitCount
-        let cropMissing = (visibleMask & ~templateMask).nonzeroBitCount
-        let missing = region == "full" ? template.points.count - matched : cropMissing
-        let expected = Double(region == "full" ? template.points.count : visibleCount)
+        // A detected pip stays positive evidence even inside an uncertain
+        // rectangle. Only unseen points may be excused as possibly occluded.
+        let uncertainMissingMask = uncertainMask & ~templateMask
+        let expectedMask = (region == "full" ? (1 << template.points.count) - 1 : visibleMask)
+            & ~uncertainMissingMask
+        let cropMissing = (visibleMask & ~uncertainMissingMask & ~templateMask).nonzeroBitCount
+        let missing = (expectedMask & ~templateMask).nonzeroBitCount
+        let expected = Double(expectedMask.nonzeroBitCount)
         let coverage = Double(matched) / Double(observed.count)
         let unexpected = exp(-1.15 * Double(observed.count - matched))
         let distance = matched > 0 ? distanceTotal / Double(matched) : 0
@@ -253,7 +329,13 @@ enum PartialRankEstimator {
         let countScore = exp(-abs(Double(observed.count) - expected) / max(1.25, expected * 0.48))
         var centerScore = 0.7
         if let index = template.centerIndex {
-            centerScore = templateMask & (1 << index) != 0 ? 1 : (cropMissing > 0 ? 0.45 : 0.2)
+            if templateMask & (1 << index) != 0 {
+                centerScore = 1
+            } else if uncertainMissingMask & (1 << index) != 0 {
+                centerScore = 0.7
+            } else {
+                centerScore = cropMissing > 0 ? 0.45 : 0.2
+            }
         }
         var middleMatched = false
         var compatible = 0
@@ -261,12 +343,17 @@ enum PartialRankEstimator {
             if abs(point.x - 0.5) < 0.04 || abs(point.y - 0.5) < 0.04 { middleMatched = true }
             if regionContains(region, point: point) { compatible += 1 }
         }
-        let middleScore = middleMatched ? 1 : (matched >= 2 ? 0.58 : 0.35)
+        let middleUncertain = template.points.enumerated().contains { index, point in
+            (abs(point.x - 0.5) < 0.04 || abs(point.y - 0.5) < 0.04)
+                && uncertainMissingMask & (1 << index) != 0
+        }
+        let middleScore = middleMatched ? 1 : (middleUncertain ? 0.7 : (matched >= 2 ? 0.58 : 0.35))
         var relevantSymmetry = 0
         var symmetryTotal = 0.0
         for (index, point) in template.points.enumerated() where point.x < 0.49 {
             if let mirror = template.points.firstIndex(where: { abs($0.x - (1 - point.x)) < 0.001 && abs($0.y - point.y) < 0.001 }),
-               visibleMask & (1 << index) != 0, visibleMask & (1 << mirror) != 0 {
+               visibleMask & (1 << index) != 0, visibleMask & (1 << mirror) != 0,
+               uncertainMissingMask & ((1 << index) | (1 << mirror)) == 0 {
                 relevantSymmetry += 1
                 let pairCount = (templateMask & ((1 << index) | (1 << mirror))).nonzeroBitCount
                 symmetryTotal += pairCount == 2 ? 1 : (pairCount == 1 ? 0.35 : 0)
@@ -278,8 +365,20 @@ enum PartialRankEstimator {
         let fit = 0.22 * coverage + 0.12 * unexpected + 0.15 * distance + 0.16 * visibleCoverage
         let support = 0.08 * countScore + 0.08 * min(1, Double(matched) / 3)
         let structure = 0.055 * centerScore + 0.035 * middleScore + 0.055 * symmetry + 0.055 * regionScore
-        let value = (fit + support + structure) * transform.plausibility
-        return Score(value: min(1, max(0, value)), matchedCount: matched)
+        let value = (fit + support + structure) * plausibility
+        return Score(value: min(1, max(0, value)), matchedCount: matched,
+                     visibleMissingCount: missing,
+                     uncertainMissingCount: uncertainMissingMask.nonzeroBitCount,
+                     matchQuality: distance)
+    }
+
+    private static func isUncertain(_ point: Point, viewport: Point, regions: [CGRect]) -> Bool {
+        let normalized = CGPoint(
+            x: point.x / max(viewport.x, 0.0001),
+            y: point.y / max(viewport.y, 0.0001))
+        return regions.contains { region in
+            region.contains(normalized)
+        }
     }
 
     private static func regionContains(_ region: String, point: Point) -> Bool {

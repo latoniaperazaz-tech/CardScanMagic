@@ -24,6 +24,97 @@ final class PartialEvidenceFusionTests: XCTestCase {
         XCTAssertEqual(CardEventCoordinator().processUpdate(result, at: Date()).records.count, 1)
     }
 
+    func testPipTopologyRankConfirmsWithoutOCR() throws {
+        let nine = topologyPoints("9")
+        let layout = PartialRankEstimator.infer(points: nine, imageAspectRatio: 2.5 / 3.5,
+                                               visibleRegion: "full", surfaceAnchored: true)
+        XCTAssertEqual(layout.rank, "9")
+        let local = evidence(rank: "9", suit: "club", pips: nine, layout: layout)
+        XCTAssertNil(local.features.rankText)
+        let result = fuse(local: [local])
+        let found = try XCTUnwrap(result.first)
+        XCTAssertEqual(found.card.code, "9c")
+        XCTAssertTrue(found.hasIndependentSupport)
+        XCTAssertEqual(CardEventCoordinator().processUpdate(result, at: Date()).records.map(\.card),
+                      [CardFace.parse("9c")!])
+    }
+
+    func testEveryNumberRankUsesRealTopologyWithoutOCR() throws {
+        for rank in ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"] {
+            let points = topologyPoints(rank)
+            let layout = PartialRankEstimator.infer(points: points, imageAspectRatio: 2.5 / 3.5,
+                                                   visibleRegion: "full", surfaceAnchored: true)
+            let local = evidence(rank: rank, suit: "club", pips: points, layout: layout)
+            XCTAssertNil(local.features.rankText)
+            let detections = fuse(local: [local])
+            XCTAssertEqual(try XCTUnwrap(detections.first, "Rank \(rank)").card.rank,
+                           rank, "Rank \(rank)")
+            let coordinator = CardEventCoordinator()
+            let start = Date(timeIntervalSinceReferenceDate: 100)
+            let first = coordinator.processUpdate(detections, at: start)
+            let second = coordinator.processUpdate(detections, at: start.addingTimeInterval(0.04))
+            XCTAssertEqual(first.records.count + second.records.count, 1, "Rank \(rank)")
+        }
+    }
+
+    func testPipOnlyNeedsVerifiedCardGeometry() {
+        XCTAssertTrue(fuse(local: [evidence(surfaceAnchored: false)]).isEmpty)
+        XCTAssertTrue(fuse(local: [evidence(localization: 0.49)]).isEmpty)
+    }
+
+    func testPipOnlyNeedsRepeatedStructureAndBodySuitAgreement() {
+        XCTAssertTrue(fuse(local: [evidence(pipStructureConfidence: 0.2)]).isEmpty)
+        XCTAssertTrue(fuse(local: [evidence(bodySuitSupportingPips: 1)]).isEmpty)
+        XCTAssertTrue(fuse(local: [evidence(suitProbabilities: [
+            "club": 0.49, "spade": 0.49, "diamond": 0.01, "heart": 0.01
+        ])]).isEmpty)
+    }
+
+    func testPipOnlyCannotReplaceMissingTopologyDistributionWithCertainty() {
+        let invented = PartialRankResult(rank: "5", confidence: 0.99, candidates: [])
+        XCTAssertTrue(fuse(local: [evidence(layout: invented)]).isEmpty)
+    }
+
+    func testPipOnlyRejectsInvalidOrFlatTopologyDistribution() {
+        let ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+        for probability in [0.1, 0.5, Double.nan] {
+            let candidates = ranks.map {
+                PartialRankCandidate(rank: $0, probability: probability, score: 0.99, matchedCount: 5)
+            }
+            let invented = PartialRankResult(rank: "5", confidence: 0.99, candidates: candidates)
+            XCTAssertTrue(fuse(local: [evidence(layout: invented)]).isEmpty)
+        }
+    }
+
+    func testPipOnlyCannotConfirmAmbiguousOccludedNineOrTen() {
+        let points = topologyPoints("9").filter { abs($0.x - 0.5) > 0.1 }
+        let layout = PartialRankEstimator.infer(points: points, imageAspectRatio: 2.5 / 3.5,
+            visibleRegion: "full", uncertainRegions: [CGRect(x: 0.42, y: 0.20, width: 0.16, height: 0.60)],
+            surfaceAnchored: true)
+        XCTAssertNil(layout.rank)
+        XCTAssertTrue(fuse(local: [evidence(rank: "9", suit: "club", pips: points, layout: layout)]).isEmpty)
+    }
+
+    func testNineRandomDarkComponentsAreNotNinePipTopology() {
+        let points: [CGPoint] = [(0.1, 0.1), (0.2, 0.13), (0.31, 0.24), (0.47, 0.31),
+            (0.66, 0.42), (0.79, 0.47), (0.88, 0.60), (0.17, 0.73), (0.91, 0.94)]
+            .map { CGPoint(x: $0.0, y: $0.1) }
+        let layout = PartialRankEstimator.infer(points: points, imageAspectRatio: 2.5 / 3.5,
+                                               visibleRegion: "full", surfaceAnchored: true)
+        XCTAssertNil(layout.rank)
+        XCTAssertTrue(fuse(local: [evidence(rank: "9", suit: "club", pips: points, layout: layout)]).isEmpty)
+    }
+
+    func testRankAndSuitFromDifferentRegionsCannotFormACard() {
+        let rankOnly = evidence(rank: "9", suitConfidence: 0.1)
+        let suitOnly = evidence(rank: nil, suit: "club",
+                               boundingBox: CGRect(x: 0.75, y: 0.2, width: 0.2, height: 0.5))
+        XCTAssertTrue(fuse(local: [rankOnly]).isEmpty)
+        XCTAssertTrue(fuse(local: [suitOnly]).isEmpty)
+        XCTAssertTrue(fuse(local: [rankOnly, suitOnly]).isEmpty)
+        XCTAssertTrue(fuse(local: [suitOnly, rankOnly]).isEmpty)
+    }
+
     func testModelOnlyDoesNotAcquireIndependentSupport() {
         let result = fuse(model: [detection("5d", confidence: 0.96)])
         XCTAssertFalse(result[0].hasIndependentSupport)
@@ -118,10 +209,10 @@ final class PartialEvidenceFusionTests: XCTestCase {
         XCTAssertTrue(CardEventCoordinator().process(repeated, at: Date()).isEmpty)
     }
 
-    func testDuplicatedPipCentersDoNotSupplyStrongLayoutSupport() throws {
+    func testDuplicatedPipCentersDoNotSupplyStrongLayoutSupport() {
         let pips = Array(repeating: CGPoint(x: 0.5, y: 0.5), count: 5)
         let result = fuse(local: [evidence(pips: pips)])
-        XCTAssertFalse(try XCTUnwrap(result.first).hasIndependentSupport)
+        XCTAssertTrue(result.isEmpty)
         XCTAssertTrue(CardEventCoordinator().process(result, at: Date()).isEmpty)
     }
 
@@ -190,17 +281,43 @@ final class PartialEvidenceFusionTests: XCTestCase {
                           suitConfidence: Double = 0.94, text: String? = nil,
                           textConfidence: Double = 0.96, localization: Double = 0.90,
                           suit: String = "diamond", suitProbabilities: [String: Double]? = nil,
-                          pips: [CGPoint]? = nil, boundingBox: CGRect? = nil) -> PartialEvidenceFusion.Evidence {
+                          pips: [CGPoint]? = nil, boundingBox: CGRect? = nil,
+                          layout: PartialRankResult? = nil, surfaceAnchored: Bool = true,
+                          pipStructureConfidence: Double = 0.95,
+                          bodySuitSupportingPips: Int? = nil) -> PartialEvidenceFusion.Evidence {
         let probabilities = suitProbabilities ?? Dictionary(uniqueKeysWithValues:
             ["diamond", "heart", "club", "spade"].map { ($0, $0 == suit ? 0.97 : 0.01) })
+        let points = pips ?? topologyPoints(rank ?? "5")
         let features = PartialCardFeatures(boundingBox: boundingBox ?? box,
-            pipCenters: pips ?? [CGPoint(x: 0.3, y: 0.18), CGPoint(x: 0.7, y: 0.18),
-                                CGPoint(x: 0.5, y: 0.5), CGPoint(x: 0.3, y: 0.82), CGPoint(x: 0.7, y: 0.82)],
+            pipCenters: points,
             imageAspectRatio: 2.5 / 3.5, visibleRegion: "full",
             suitProbabilities: probabilities,
             suitConfidence: suitConfidence, rankText: text, rankTextConfidence: text == nil ? 0 : textConfidence,
-            localizationConfidence: localization)
+            localizationConfidence: localization,
+            surfaceAnchored: surfaceAnchored, pipStructureConfidence: pipStructureConfidence,
+            bodySuitSupportingPips: bodySuitSupportingPips ?? points.count, bodyPipCount: points.count)
+        let actualLayout = PartialRankEstimator.infer(points: points, imageAspectRatio: 2.5 / 3.5,
+                                                     visibleRegion: "full", surfaceAnchored: true)
         return .init(features: features,
-                     layout: PartialRankResult(rank: rank, confidence: rankConfidence, candidates: []))
+                     layout: layout ?? PartialRankResult(rank: rank, confidence: rankConfidence,
+                                                        candidates: actualLayout.candidates))
+    }
+
+    private func topologyPoints(_ rank: String) -> [CGPoint] {
+        let layouts: [String: [(Double, Double)]] = [
+            "A": [(0.5, 0.5)],
+            "2": [(0.5, 0.18), (0.5, 0.82)],
+            "3": [(0.5, 0.18), (0.5, 0.5), (0.5, 0.82)],
+            "4": [(0.3, 0.18), (0.7, 0.18), (0.3, 0.82), (0.7, 0.82)],
+            "5": [(0.3, 0.18), (0.7, 0.18), (0.5, 0.5), (0.3, 0.82), (0.7, 0.82)],
+            "6": [(0.3, 0.18), (0.7, 0.18), (0.3, 0.5), (0.7, 0.5), (0.3, 0.82), (0.7, 0.82)],
+            "7": [(0.3, 0.18), (0.7, 0.18), (0.5, 0.34), (0.3, 0.5), (0.7, 0.5), (0.3, 0.82), (0.7, 0.82)],
+            "8": [(0.3, 0.18), (0.7, 0.18), (0.5, 0.34), (0.3, 0.5), (0.7, 0.5), (0.5, 0.66), (0.3, 0.82), (0.7, 0.82)],
+            "9": [(0.3, 0.15), (0.7, 0.15), (0.3, 0.38), (0.7, 0.38), (0.5, 0.5),
+                  (0.3, 0.62), (0.7, 0.62), (0.3, 0.85), (0.7, 0.85)],
+            "10": [(0.3, 0.15), (0.7, 0.15), (0.5, 0.29), (0.3, 0.38), (0.7, 0.38),
+                   (0.3, 0.62), (0.7, 0.62), (0.5, 0.71), (0.3, 0.85), (0.7, 0.85)]
+        ]
+        return (layouts[rank.uppercased()] ?? layouts["5"]!).map { CGPoint(x: $0.0, y: $0.1) }
     }
 }

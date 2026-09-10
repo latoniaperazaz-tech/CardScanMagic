@@ -60,8 +60,14 @@ enum PartialEvidenceFusion {
             let localConfidence = min(rankConfidence, features.suitConfidence)
             let agreeing = nearby.filter { $0.card == card }.max { $0.confidence < $1.confidence }
             let dualRankSupport = evidence.textRank != nil && evidence.layoutRank == evidence.textRank
+            let pipTopologySupport = hasPipTopologyEvidence(evidence)
+            // An unreadable corner may be replaced by body topology, but an
+            // unqualified collection of dark components must not become a face.
+            // Model and readable-rank support retain their existing paths.
+            guard evidence.textRank != nil || agreeing != nil || pipTopologySupport else { continue }
             let strongLayout = evidence.layoutRank != nil && evidence.source.layout.confidence >= 0.90
-                && distinctPipCount(features.pipCenters) >= 4
+                && pipTopologySupport
+                && (distinctPipCount(features.pipCenters) >= 4 || features.surfaceAnchored)
             let independent = (agreeing?.confidence ?? 0) >= 0.65
                 || dualRankSupport || strongLayout
             let confidence: Float
@@ -140,9 +146,38 @@ enum PartialEvidenceFusion {
                 continue
             }
             distinct.append(point)
-            if distinct.count >= 4 { return distinct.count }
         }
         return distinct.count
+    }
+
+    private static func hasPipTopologyEvidence(_ evidence: ResolvedEvidence) -> Bool {
+        let features = evidence.source.features
+        let layout = evidence.source.layout
+        let count = distinctPipCount(features.pipCenters)
+        let numericRanks: Set<String> = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+        guard let rank = evidence.layoutRank, numericRanks.contains(rank), count > 0,
+              count == features.bodyPipCount, count == features.pipCenters.count,
+              validConfidence(features.pipStructureConfidence), features.pipStructureConfidence >= 0.70,
+              features.bodySuitSupportingPips >= min(count, 3),
+              features.bodySuitSupportingPips <= count,
+              Double(features.bodySuitSupportingPips) / Double(count) >= 0.60,
+              layout.candidates.count == numericRanks.count,
+              Set(layout.candidates.map(\.rank)) == numericRanks,
+              layout.candidates.allSatisfy({
+                  validConfidence($0.probability) && validConfidence($0.score)
+                      && $0.matchedCount >= 0 && $0.matchedCount <= count
+              }),
+              abs(layout.candidates.reduce(0) { $0 + $1.probability } - 1) <= 0.01 else { return false }
+        let ordered = layout.candidates.sorted { $0.probability > $1.probability }
+        guard let best = ordered.first, best.rank == rank, best.matchedCount == count,
+              best.score >= 0.72, best.probability >= 0.27,
+              best.probability - ordered[1].probability >= 0.055 else { return false }
+        // A complete card establishes absolute pip positions and visible empty
+        // positions for A/2/3. A partial crop still needs several matching pips.
+        if features.surfaceAnchored { return features.visibleRegion == "full" }
+        let partialRegions: Set<String> = ["left", "right", "top", "bottom", "center",
+            "top_left", "top_right", "bottom_left", "bottom_right"]
+        return count >= 3 && partialRegions.contains(features.visibleRegion)
     }
 
     private static func parseSuit(_ value: String) -> CardFace.Suit? {

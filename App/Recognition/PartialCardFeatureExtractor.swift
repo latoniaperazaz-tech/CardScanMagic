@@ -15,6 +15,12 @@ struct PartialCardFeatures {
     let rankText: String?
     let rankTextConfidence: Double
     let localizationConfidence: Double
+    var surfaceAnchored = false
+    var pipStructureConfidence = 0.0
+    var bodySuitSupportingPips = 0
+    var bodyPipCount = 0
+    /// Normalized x-right/y-down crop regions; not claims of hand identity.
+    var uncertainRegions: [CGRect] = []
 }
 
 /// Serialized by RecognitionEngine. Coordinates follow Vision for boxes and
@@ -45,6 +51,9 @@ final class PartialCardFeatureExtractor {
         let scores: [String: Double]
         let shapeConfidence: Double
         let isClipped: Bool
+        // Shape similarity gates suit evidence, but must not gate retention of
+        // a geometric pip candidate used by PartialRankEstimator.
+        let suitEligible: Bool
     }
 
     private let context = CIContext(options: [.cacheIntermediates: false])
@@ -137,15 +146,28 @@ final class PartialCardFeatureExtractor {
         var results: [PartialCardFeatures] = []
         for candidate in candidates.prefix(3) {
             guard let raster = rasterize(candidate.image) else { continue }
-            let pips = extractPips(raster)
+            let uncertainRegions = detectUncertainRegions(raster)
+            let pips = extractPips(raster).filter { pip in
+                !uncertainRegions.contains { $0.contains(pip.center) }
+            }
             let rank = try recognizeRank(in: candidate.image)
             guard !pips.isEmpty || rank.text != nil else { continue }
-            let suit = combineSuits(pips)
             let aspectRatio = Double(raster.width) / Double(raster.height)
             let bodyPips = pips.filter {
-                !$0.isClipped
-                    && !Self.isCornerIndex($0.center, aspectRatio: aspectRatio, region: candidate.region)
+                !Self.isCornerIndex($0.center, aspectRatio: aspectRatio, region: candidate.region)
             }
+            // Corner glyphs cannot supply the only suit evidence for a body
+            // topology. OCR still uses the existing combined suit path.
+            let suit = combineSuits(rank.text == nil ? bodyPips : pips)
+            let dominantSuit = suit.probabilities.max { $0.value < $1.value }?.key
+            let supporting = bodyPips.filter {
+                $0.suitEligible && $0.shapeConfidence >= 0.60
+                    && $0.scores.max(by: { $0.value < $1.value })?.key == dominantSuit
+            }.count
+            let areas = bodyPips.map { Double($0.area) }.sorted()
+            let medianArea = areas.isEmpty ? 1 : areas[areas.count / 2]
+            let consistent = areas.filter { $0 >= medianArea * 0.5 && $0 <= medianArea * 2 }.count
+            let structure = bodyPips.isEmpty ? 0 : Double(consistent) / Double(bodyPips.count)
             results.append(PartialCardFeatures(
                 boundingBox: candidate.boundingBox,
                 pipCenters: bodyPips.map(\.center),
@@ -155,7 +177,12 @@ final class PartialCardFeatureExtractor {
                 suitConfidence: suit.confidence,
                 rankText: rank.text,
                 rankTextConfidence: rank.confidence,
-                localizationConfidence: candidate.confidence
+                localizationConfidence: candidate.confidence,
+                surfaceAnchored: candidate.region == "full",
+                pipStructureConfidence: structure,
+                bodySuitSupportingPips: supporting,
+                bodyPipCount: bodyPips.count,
+                uncertainRegions: uncertainRegions
             ))
         }
         return results
@@ -325,7 +352,6 @@ final class PartialCardFeatureExtractor {
                 // not enough shape information to classify a suit.
                 guard aspect > 0.30, aspect < 2.4, occupancy > 0.20 else { continue }
                 let shape = classify(component, imageWidth: raster.width, isRed: isRed)
-                guard shape.similarity >= 0.61 else { continue }
                 let center = CGPoint(x: component.center.x / CGFloat(raster.width),
                                      y: component.center.y / CGFloat(raster.height))
                 if pips.contains(where: {
@@ -335,11 +361,61 @@ final class PartialCardFeatureExtractor {
                     || box.maxX >= CGFloat(raster.width - 1) || box.maxY >= CGFloat(raster.height - 1)
                 pips.append(Pip(center: center, area: area, scores: shape.probabilities,
                                 shapeConfidence: shape.confidence * (isClipped ? 0.2 : 1),
-                                isClipped: isClipped))
+                                isClipped: isClipped,
+                                suitEligible: shape.similarity >= 0.61))
             }
         }
         return Array(pips.sorted { $0.area > $1.area }.prefix(18)).sorted {
             $0.center.y == $1.center.y ? $0.center.x < $1.center.x : $0.center.y < $1.center.y
+        }
+    }
+
+    /// Large non-paper components are uncertain visibility, including those
+    /// entering from an edge. A bounded tile mask follows the component rather
+    /// than marking its entire bounding box (which could hide visible pips).
+    private func detectUncertainRegions(_ raster: Raster) -> [CGRect] {
+        let count = raster.width * raster.height
+        var histogram = [Int](repeating: 0, count: 256)
+        for index in 0..<count {
+            let offset = index * 4
+            histogram[Int(max(raster.rgba[offset], max(raster.rgba[offset + 1], raster.rgba[offset + 2])))] += 1
+        }
+        let whiteLevel = percentile(histogram, fraction: 0.72)
+        var mask = [UInt8](repeating: 0, count: count)
+        for index in 0..<count {
+            let offset = index * 4
+            let r = Int(raster.rgba[offset])
+            let g = Int(raster.rgba[offset + 1])
+            let b = Int(raster.rgba[offset + 2])
+            let bright = max(r, max(g, b))
+            let dark = min(r, min(g, b))
+            let saturation = 255 * (bright - dark) / max(1, bright)
+            mask[index] = (bright < whiteLevel - 42 || saturation > 65) ? 1 : 0
+        }
+        let grid = 16
+        var foreground = [Int](repeating: 0, count: grid * grid)
+        for component in components(mask, width: raster.width, height: raster.height)
+            where component.pixels.count >= max(32, count / 35) {
+            // An unusually large Ace glyph is still printed evidence, not an
+            // occluder. This exception does not relax suit classification.
+            let sample = component.pixels[component.pixels.count / 2] * 4
+            let r = Int(raster.rgba[sample]), g = Int(raster.rgba[sample + 1])
+            let b = Int(raster.rgba[sample + 2])
+            let shape = classify(component, imageWidth: raster.width,
+                                 isRed: r >= 45 && r - g >= 20 && r - b >= 16)
+            if shape.similarity >= 0.61 && shape.confidence >= 0.60 { continue }
+            for index in component.pixels {
+                let x = min(grid - 1, (index % raster.width) * grid / raster.width)
+                let y = min(grid - 1, (index / raster.width) * grid / raster.height)
+                foreground[y * grid + x] += 1
+            }
+        }
+        let cellArea = Double(count) / Double(grid * grid)
+        return foreground.indices.compactMap { index in
+            guard Double(foreground[index]) >= cellArea * 0.15 else { return nil }
+            return CGRect(x: Double(index % grid) / Double(grid),
+                          y: Double(index / grid) / Double(grid),
+                          width: 1.0 / Double(grid), height: 1.0 / Double(grid))
         }
     }
 
@@ -399,14 +475,18 @@ final class PartialCardFeatureExtractor {
     }
 
     private func combineSuits(_ pips: [Pip]) -> (probabilities: [String: Double], confidence: Double) {
-        guard !pips.isEmpty else {
+        // Low-similarity components remain valid geometric pip candidates,
+        // but cannot contribute suit confidence. This preserves the existing
+        // suit threshold semantics while allowing topology-only rank evidence.
+        let suitPips = pips.filter(\.suitEligible)
+        guard !suitPips.isEmpty else {
             return (Dictionary(uniqueKeysWithValues: Self.suits.map { ($0, 0.25) }), 0)
         }
         var accumulated = Dictionary(uniqueKeysWithValues: Self.suits.map { ($0, 0.0) })
-        let largest = Double(pips.map(\.area).max() ?? 1)
+        let largest = Double(suitPips.map(\.area).max() ?? 1)
         var totalWeight = 0.0
         var confidenceSum = 0.0
-        for pip in pips {
+        for pip in suitPips {
             let weight = (0.3 + 0.7 * Double(pip.area) / largest) * max(0.1, pip.shapeConfidence)
             totalWeight += weight
             confidenceSum += weight * pip.shapeConfidence

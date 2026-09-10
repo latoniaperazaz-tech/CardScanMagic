@@ -110,11 +110,7 @@ final class RecognitionEngine {
             orientedImageSize: orientedImageSize
         )
         let features = try partialExtractor.extract(pixelBuffer: pixelBuffer, orientation: orientation)
-        let evidence = features.map {
-            PartialEvidenceFusion.Evidence(features: $0, layout: PartialRankEstimator.infer(
-                points: $0.pipCenters, imageAspectRatio: $0.imageAspectRatio,
-                visibleRegion: $0.visibleRegion))
-        }
+        let evidence = Self.partialEvidence(from: features)
         var modelDetections = fullFrameDetections
         let firstPass = PartialEvidenceFusion.fuse(model: modelDetections, local: evidence,
                                                    imageSize: orientedImageSize)
@@ -128,7 +124,19 @@ final class RecognitionEngine {
             }
         }
         return PartialEvidenceFusion.fuse(model: modelDetections, local: evidence,
-                                           imageSize: orientedImageSize)
+                                          imageSize: orientedImageSize)
+    }
+
+    /// Shared with image integration tests so OCR-free fixtures exercise the
+    /// same topology/visibility handoff as live RecognitionEngine frames.
+    static func partialEvidence(from features: [PartialCardFeatures]) -> [PartialEvidenceFusion.Evidence] {
+        features.map {
+            PartialEvidenceFusion.Evidence(features: $0, layout: PartialRankEstimator.infer(
+                points: $0.pipCenters, imageAspectRatio: $0.imageAspectRatio,
+                visibleRegion: $0.visibleRegion,
+                uncertainRegions: $0.uncertainRegions,
+                surfaceAnchored: $0.surfaceAnchored))
+        }
     }
 
     private static func makeRequest(
