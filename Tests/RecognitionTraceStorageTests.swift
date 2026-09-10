@@ -22,16 +22,15 @@ final class RecognitionTraceStorageTests: XCTestCase {
             XCTAssertEqual(first.metadata.pixelFormat, second.metadata.pixelFormat)
             XCTAssertEqual(first.metadata.orientation, second.metadata.orientation)
             XCTAssertTrue(second.metadata.metadataComplete)
-            XCTAssertEqual(first.attachments, second.attachments)
-            for index in first.planes.indices {
-                // Compare active bytes, including all original stride bytes when allocation preserves alignment.
-                let lhs = first.metadata.planes[index], rhs = second.metadata.planes[index]
-                for row in 0..<lhs.height {
-                    let count = min(lhs.bytesPerRow, rhs.bytesPerRow)
-                    XCTAssertEqual(first.planes[index].subdata(in: row * lhs.bytesPerRow ..< row * lhs.bytesPerRow + count),
-                                   second.planes[index].subdata(in: row * rhs.bytesPerRow ..< row * rhs.bytesPerRow + count))
-                }
-            }
+            // The stored archive is byte-exact; a new binary plist may reorder dictionary keys.
+            XCTAssertEqual(first.attachments, read.attachments)
+            let originalAttachments = try XCTUnwrap(
+                PropertyListSerialization.propertyList(from: first.attachments, format: nil) as? NSDictionary)
+            let restoredAttachments = try XCTUnwrap(
+                PropertyListSerialization.propertyList(from: second.attachments, format: nil) as? NSDictionary)
+            XCTAssertEqual(originalAttachments, restoredAttachments)
+            XCTAssertEqual(first.metadata.planes.map(\.bytesPerRow), second.metadata.planes.map(\.bytesPerRow))
+            XCTAssertEqual(first.planes, second.planes, "All plane bytes, including row padding, must survive replay")
         }
     }
 

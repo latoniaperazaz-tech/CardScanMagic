@@ -270,10 +270,12 @@ struct RecognitionTracePixels {
     }
 
     private static func validateMetadata(_ metadata: Metadata) throws {
+        // Imported C enum initializers can preserve unknown raw values. EXIF
+        // orientation must be validated against its actual closed 1...8 range.
         guard metadata.schemaVersion == 2,
               metadata.width > 0, metadata.width <= 16384,
               metadata.height > 0, metadata.height <= 16384,
-              CGImagePropertyOrientation(rawValue: metadata.orientation) != nil,
+              metadata.orientation >= 1, metadata.orientation <= 8,
               metadata.planes.count >= 1, metadata.planes.count <= 4,
               metadata.planar || metadata.planes.count == 1,
               metadata.attachmentsFile == "recognition_input_attachments.plist",

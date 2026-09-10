@@ -114,6 +114,8 @@ final class RecognitionTracePixelsTests: XCTestCase {
         let mutations: [(inout [String: Any]) -> Void] = [
             { $0["schemaVersion"] = 99 },
             { $0["orientation"] = 0 },
+            { $0["orientation"] = 9 },
+            { $0["orientation"] = UInt32.max },
             { $0["planes"] = [] },
             { $0["width"] = 0 },
             { $0["height"] = 16385 },
