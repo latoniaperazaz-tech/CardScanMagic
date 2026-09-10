@@ -97,6 +97,8 @@ final class RecognitionTrace {
     /// Categories only: preserve the detailed branch reason and never affect its result.
     private static func reasonCode(_ stage: String, _ fields: [String: Any]) -> String? {
         if stage == "engine.final", let output = fields["finalDetections"] as? [Any], output.isEmpty { return "NO_FINAL_DETECTION" }
+        if stage == "pipSummary", fields["componentState"] as? String == "completed",
+           fields["detectedCount"] as? Int == 0 { return "NO_PIP_COMPONENT" }
         if stage == "fusion.conflict", fields["vetoed"] as? Bool == true {
             return fields["rankConflict"] as? Bool == true ? "OCR_CONFLICT" : "RANK_SUIT_CONFLICT"
         }

@@ -30,7 +30,12 @@ final class RecognitionTraceIsolationTests: XCTestCase {
         let session = RecognitionTraceSession(runID: UUID(), sessionID: 1, configuration: config)
         let blocked = expectation(description: "writer stalled")
         let release = DispatchSemaphore(value: 0)
-        session.flush { blocked.fulfill(); _ = release.wait(timeout: .now() + 20) }
+        session.flush {
+            blocked.fulfill()
+            if release.wait(timeout: .now() + 20) == .timedOut {
+                XCTFail("Recognition failed to complete while disk writer was blocked")
+            }
+        }
         wait(for: [blocked], timeout: 2)
         defer { release.signal() }
         let input = try makeBuffer()

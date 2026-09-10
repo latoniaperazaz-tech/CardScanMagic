@@ -155,6 +155,7 @@ final class RecognitionEvidenceTraceTests: XCTestCase {
             }
             assertEqual(off.0, on.0)
             XCTAssertEqual(off.1, on.1, name)
+            print("[TraceEquivalence] fixture=\(name) OFF=\(off.1.sorted { $0.key < $1.key }) ON=\(on.1.sorted { $0.key < $1.key })")
             XCTAssertEqual(trace.callCounts, on.1, name)
             XCTAssertEqual(on.1["fusion"], 2, name)
             XCTAssertGreaterThanOrEqual(on.1["coreML"] ?? 0, 1, name)

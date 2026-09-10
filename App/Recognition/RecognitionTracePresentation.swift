@@ -34,13 +34,18 @@ enum RecognitionTracePresentation {
     /// Do not turn absent telemetry into a measured zero. A completed component
     /// pass can measure zero; a failed brightness guard has never run that pass.
     static func detectedPipCount(in local: [[String: Any]]) -> Any {
-        let detected = local.filter { $0["stage"] as? String == "componentDetected"
-            && ($0["purpose"] as? String ?? "").hasPrefix("pip") }
-        if !detected.isEmpty { return detected.count }
         let summaries = local.filter { $0["stage"] as? String == "pipSummary" }
+        // The production pass's total survives entry truncation. Counting the
+        // retained log entries first would incorrectly present a partial count.
         if let explicit = summaries.last(where: { $0["detectedCount"] != nil }) {
             return explicit["detectedCount"] ?? NSNull()
         }
+        if let compactCount = summaries.last(where: { $0["comparisonObservedComponentCount"] != nil }) {
+            return compactCount["comparisonObservedComponentCount"] ?? NSNull()
+        }
+        let detected = local.filter { $0["stage"] as? String == "componentDetected"
+            && ($0["purpose"] as? String ?? "").hasPrefix("pip") }
+        if !detected.isEmpty { return detected.count }
         if summaries.contains(where: { ["extracted", "completed"].contains($0["state"] as? String ?? "") }) { return 0 }
         return NSNull()
     }

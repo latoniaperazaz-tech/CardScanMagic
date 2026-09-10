@@ -471,7 +471,7 @@ final class PartialCardFeatureExtractor {
                     "reason": "SURFACE_COMPONENT_CAP", "candidateState": "notEvaluated"])
             }
         }
-        return plausible.prefix(6)
+        let result: [(box: CGRect, region: String, confidence: Double, occupancy: Double, componentID: Int?)] = plausible.prefix(6)
             .compactMap { component in
                 let box = component.bounds
                 guard box.width >= 16, box.height >= 16 else {
@@ -504,6 +504,9 @@ final class PartialCardFeatureExtractor {
                     "boundingBox": RecognitionTrace.rect(normalized), "localizationConfidence": confidence])
                 return (normalized, region, confidence, occupancy, component.traceID)
             }
+        RecognitionTrace.current?.event("surface", ["state": "completed", "candidateCount": result.count,
+            "reason": result.isEmpty ? "NO_CARD_SURFACE" : "SURFACE_CANDIDATES"])
+        return result
     }
 
     private func extractPips(_ raster: Raster) -> [Pip] {

@@ -81,8 +81,13 @@ final class RecognitionTraceComparisonTests: XCTestCase {
         XCTAssertFalse(RecognitionTraceComparison.sameMetadata([:], [:]))
         XCTAssertFalse(RecognitionTraceComparison.sameMetadata(["sourceRevision": "unknown", "systemVersion": "iOS"],
                                                                ["sourceRevision": "unknown", "systemVersion": "iOS"]))
-        XCTAssertTrue(RecognitionTraceComparison.sameMetadata(["sourceRevision": "abc", "systemVersion": "iOS"],
-                                                              ["sourceRevision": "abc", "systemVersion": "iOS"]))
+        let known = ["sourceRevision": "abc", "systemVersion": "iOS", "modelSHA256": modelHash]
+        XCTAssertTrue(RecognitionTraceComparison.sameMetadata(known, known))
+        XCTAssertFalse(RecognitionTraceComparison.sameMetadata(["sourceRevision": "abc", "systemVersion": "iOS"], known))
+        var different = known; different["modelSHA256"] = String(repeating: "b", count: 64)
+        XCTAssertFalse(RecognitionTraceComparison.sameMetadata(known, different))
+        different["modelSHA256"] = "not-a-hash"
+        XCTAssertFalse(RecognitionTraceComparison.sameMetadata(different, different))
     }
 
     func testOptionalOCRFailureIsNotDisplayedAsTerminalEngineFailure() {
@@ -140,6 +145,15 @@ final class RecognitionTraceComparisonTests: XCTestCase {
         XCTAssertTrue(RecognitionTracePresentation.detectedPipCount(in: []) is NSNull)
     }
 
+    func testActualDetectedCountWinsOverTruncatedComponentEntries() {
+        let local: [[String: Any]] = [
+            ["stage": "componentDetected", "purpose": "pipBlack"],
+            ["stage": "pipSummary", "state": "extracted", "detectedCount": 27, "retainedCount": 9],
+            ["stage": "pipSummary", "state": "completed", "retainedCount": 9]
+        ]
+        XCTAssertEqual(RecognitionTracePresentation.detectedPipCount(in: local) as? Int, 27)
+    }
+
     func testUIReceiptRecordIDsDoNotCountAsEvidenceDifferences() throws {
         var a = observation(), b = observation(id: "covered")
         a["uiReceipts"] = [["recordID": "record-A", "card": "9C", "recordAccepted": true]]
@@ -195,6 +209,62 @@ final class RecognitionTraceComparisonTests: XCTestCase {
         }
     }
 
+    func testReportLoadHasExplicitObservationBudgetAndPreservesOmittedReferences() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try RecognitionTraceJSON.data(observation()).write(to: root.appendingPathComponent("trace.json"))
+        let count = RecognitionTraceComparison.maximumReportObservations + 3
+        let records = (0..<count).map { ["recognitionID": String($0), "traceFile": "trace.json"] }
+        try RecognitionTraceJSON.data(["recognitions": records]).write(to: root.appendingPathComponent("session_manifest.json"))
+        let loaded = try RecognitionTraceComparison.loadReportSession(root)
+        XCTAssertEqual(loaded.sourceObservationCount, count)
+        XCTAssertEqual(loaded.traces.count, RecognitionTraceComparison.maximumReportObservations)
+        XCTAssertEqual(loaded.omissions.count, 3)
+        XCTAssertTrue(loaded.omissions.allSatisfy { $0["reason"] == "REPORT_OBSERVATION_LIMIT" && $0["traceFile"] == "trace.json" })
+        XCTAssertTrue(loaded.traces.allSatisfy { $0["comparisonCompacted"] as? Bool == true })
+    }
+
+    func testOversizeTraceIsNotLoadedAndOtherObservationsRemainUsable() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = try writeSession(root, label: "FULL 9C", trace: observation())
+        try Data(repeating: 32, count: RecognitionTraceComparison.maximumReportTraceBytes + 1)
+            .write(to: folder.appendingPathComponent("large.json"))
+        let manifest = ["testLabel": "FULL 9C", "sourceRevision": "abc", "systemVersion": "iOS", "modelSHA256": modelHash,
+            "recognitions": [["traceFile": "large.json"], ["traceFile": "trace.json"]]] as [String: Any]
+        try RecognitionTraceJSON.data(manifest).write(to: folder.appendingPathComponent("session_manifest.json"))
+        let loaded = try RecognitionTraceComparison.loadReportSession(folder)
+        XCTAssertEqual(loaded.traces.count, 1)
+        XCTAssertEqual(loaded.omissions.first?["reason"], "REPORT_SINGLE_TRACE_BYTE_LIMIT")
+        let covered = try writeSession(root, label: "OCCLUDED 9C", trace: observation(id: "covered"))
+        let report = try RecognitionTraceComparison.report(full: folder, covered: covered)
+        XCTAssertTrue(report.contains("PARTIAL COMPARISON"))
+        XCTAssertTrue(report.contains("large.json"))
+        XCTAssertTrue(report.contains("REPORT_SINGLE_TRACE_BYTE_LIMIT"))
+        XCTAssertTrue(report.contains("original exported files") || report.contains("Original exported files"))
+    }
+
+    func testCompactReportDiscardsLowLevelHistoryButKeepsActualPipTotalsAndFinalOutcome() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var trace = observation()
+        var entries = RecognitionTracePresentation.entries(trace)
+        let pipIndex = entries.firstIndex { $0["stage"] as? String == "pipSummary" }!
+        entries[pipIndex]["detectedCount"] = 400
+        entries += (0..<400).map { ["stage": "componentDetected", "purpose": "pipBlack", "candidateID": 1, "componentID": "pip-\($0)"] }
+        entries += (0..<400).map { ["stage": "track.input", "evidenceFrameID": "\($0 + 100)", "replayMode": "history"] }
+        trace["entries"] = entries
+        let directory = try writeSession(root, label: "FULL 9C", trace: trace)
+        let loaded = try RecognitionTraceComparison.loadReportSession(directory)
+        let compact = try XCTUnwrap(loaded.traces.first)
+        let compactEntries = RecognitionTracePresentation.entries(compact)
+        XCTAssertFalse(compactEntries.contains { $0["stage"] as? String == "componentDetected" })
+        XCTAssertFalse(compactEntries.contains { $0["stage"] as? String == "track.input" })
+        XCTAssertGreaterThanOrEqual(compact["omittedDetailEntryCount"] as? Int ?? 0, 800)
+        XCTAssertEqual(RecognitionTracePresentation.detectedPipCount(in: RecognitionTracePresentation.candidateEntries(1, in: compact)) as? Int, 400)
+        XCTAssertEqual(RecognitionTracePresentation.outcome(compact)["status"] as? String, "detectionsReturned")
+    }
+
     func testReportIncludesRequestedMetricsAndBothTerminalOutcomes() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -225,6 +295,7 @@ final class RecognitionTraceComparisonTests: XCTestCase {
     }
 
     private var box: [String: Double] { ["x": 0.2, "y": 0.1, "width": 0.5, "height": 0.7] }
+    private var modelHash: String { String(repeating: "a", count: 64) }
 
     private func observation(id: String = "full", frame: String = "1", candidateID: Int = 1,
                              timestamp: Double = 100, label: String = "FULL 9C") -> [String: Any] {
@@ -269,7 +340,7 @@ final class RecognitionTraceComparisonTests: XCTestCase {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try RecognitionTraceJSON.data(trace).write(to: folder.appendingPathComponent("trace.json"))
         try RecognitionTraceJSON.data(["runID": UUID().uuidString, "testLabel": label, "complete": true,
-            "sourceRevision": "abc", "systemVersion": "iOS", "finishedAt": "2026-09-11T00:00:00Z",
+            "sourceRevision": "abc", "systemVersion": "iOS", "modelSHA256": modelHash, "finishedAt": "2026-09-11T00:00:00Z",
             "recognitions": [["traceFile": "trace.json"]]]).write(to: folder.appendingPathComponent("session_manifest.json"))
         return folder
     }
