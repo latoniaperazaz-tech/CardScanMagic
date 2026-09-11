@@ -185,6 +185,7 @@ struct ContentView: View {
         .disabled(viewModel.isPreparing || viewModel.isScanning)
         .opacity(viewModel.isPreparing || viewModel.isScanning ? 0.48 : 1)
         .accessibilityLabel("选择摄像头")
+        .padding(.top, 24)
     }
 
     private var statusReadout: some View {
