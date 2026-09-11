@@ -138,6 +138,7 @@ jobs:
           esac
 
       - name: Generate the Xcode project
+        id: generate_project
         shell: bash
         run: |
           set -euo pipefail
@@ -158,6 +159,7 @@ jobs:
           xcodegen generate
 
       - name: Run Swift unit tests on iOS Simulator
+        id: swift_tests
         shell: bash
         run: |
           set -euo pipefail
@@ -171,6 +173,10 @@ jobs:
             CODE_SIGN_IDENTITY=""
 
       - name: Build an unsigned device app
+        id: device_build
+        # Keep the test step/job failed, but finish independent device-build
+        # validation so a diagnostic IPA can reproduce the recorded failures.
+        if: ${{ !cancelled() && steps.generate_project.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -216,6 +222,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent build/Payload build/CardScanMagic-unsigned.ipa
 
       - name: Upload the unsigned IPA
+        if: ${{ !cancelled() && steps.device_build.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: CardScanMagic-unsigned-ipa
