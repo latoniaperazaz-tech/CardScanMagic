@@ -52,6 +52,7 @@ final class PartialCardFeatureExtractor {
         let confidence: Double
         let traceID: Int?
         let traceSource: String
+        let proposalKind: String
     }
 
     private struct Pip {
@@ -158,6 +159,7 @@ final class PartialCardFeatureExtractor {
         }
 
         var candidates: [Candidate] = []
+        var internalSymbolBoxes: [(box: CGRect, candidateID: Int?)] = []
         for rectangle in rectangleRequest.results ?? [] {
             let candidateID = traceCandidate()
             trace?.candidateID = candidateID
@@ -168,6 +170,15 @@ final class PartialCardFeatureExtractor {
                 "boundingBox": RecognitionTrace.rect(box), "localizationConfidence": Double(rectangle.confidence),
                 "cardSurfaceScore": NSNull(), "cardSurfaceScoreState": "notComputed",
                 "preRectificationImage": NSNull(), "preRectificationImageState": "notRun"])
+            // Vision rectangles describe geometry only. Tiny, ink-like
+            // rectangles are retained as diagnostics/internal evidence and
+            // never consume the card-surface candidate budget.
+            if Self.isInternalSymbolProposal(box, imageExtent: bounded.extent) {
+                internalSymbolBoxes.append((box, candidateID))
+                trace?.event("candidate", ["state": "classified", "proposalKind": "internalSymbolEvidence",
+                    "reason": "SMALL_RECTANGLE_NO_SURFACE_SUPPORT", "areaFraction": Double(box.width * box.height)])
+                continue
+            }
             guard Self.visibleRegion(for: box) == "full" else {
                 trace?.event("candidate", ["state": "rejected", "reason": "RECTANGLE_NOT_FULL"])
                 continue
@@ -205,8 +216,38 @@ final class PartialCardFeatureExtractor {
                 region: "full",
                 confidence: Double(rectangle.confidence),
                 traceID: candidateID,
-                traceSource: "visionRectangle"
+                traceSource: "visionRectangle",
+                proposalKind: "cardSurfaceCandidate"
             ))
+        }
+        trace?.candidateID = nil
+
+        // A symbol proposal can seed a bounded search for the surrounding
+        // card surface. This preserves partial cards in low light without
+        // promoting the symbol itself to a full card.
+        // Prefer an interior symbol over a dark background proposal. Symbols
+        // detected in the lower/central card body are the most useful seeds;
+        // the expanded window remains explicitly partial and is still gated
+        // by the normal downstream evidence checks.
+        if candidates.isEmpty, let seed = internalSymbolBoxes.max(by: { $0.box.midY < $1.box.midY }) {
+            let extent = bounded.extent
+            let expanded = Self.expandedSurfaceBox(seed.box).intersection(Self.unitRect)
+            let crop = CGRect(x: expanded.minX * extent.width, y: expanded.minY * extent.height,
+                              width: expanded.width * extent.width, height: expanded.height * extent.height)
+                .intersection(extent)
+            if crop.width >= 16, crop.height >= 16 {
+                let recoveredID = traceCandidate()
+                trace?.candidateID = recoveredID
+                trace?.event("candidate", ["state": "recovered", "source": "visionRectangleContext",
+                    "proposalKind": "cardSurfaceCandidate", "visibleRegion": "partial",
+                    "boundingBox": RecognitionTrace.rect(expanded),
+                    "seedCandidateID": seed.candidateID as Any? ?? NSNull(),
+                    "localizationConfidence": 0.34])
+                candidates.append(Candidate(image: resized(bounded.cropped(to: crop), maximumDimension: 448),
+                    boundingBox: expanded, region: "partial", confidence: 0.34,
+                    traceID: recoveredID, traceSource: "visionRectangleContext",
+                    proposalKind: "cardSurfaceCandidate"))
+            }
         }
         trace?.candidateID = nil
 
@@ -254,7 +295,8 @@ final class PartialCardFeatureExtractor {
                     region: region,
                     confidence: surface.confidence,
                     traceID: candidateID,
-                    traceSource: "surfaceFallback"
+                    traceSource: "surfaceFallback",
+                    proposalKind: "cardSurfaceCandidate"
                 ))
             }
         } else {
@@ -456,7 +498,7 @@ final class PartialCardFeatureExtractor {
         }
         RecognitionTrace.current?.event("surface", ["state": "mask", "brightnessFloor": floor,
             "width": raster.width, "height": raster.height])
-        let plausible = components(mask, width: raster.width, height: raster.height, purpose: "surface", raster: raster)
+        var plausible = components(mask, width: raster.width, height: raster.height, purpose: "surface", raster: raster)
             .filter { component in
                 let retained = component.pixels.count >= max(120, count / 75)
                 if !retained {
@@ -465,6 +507,57 @@ final class PartialCardFeatureExtractor {
                 return retained
             }
             .sorted { $0.pixels.count > $1.pixels.count }
+        // In low light the absolute floor can sit above the entire card
+        // surface. Build a second, bounded proposal mask from local scene
+        // statistics. This is an analysis mask only; recognition receives
+        // the original pixels and all existing downstream thresholds remain
+        // unchanged.
+        if plausible.isEmpty {
+            var grayValues = [Int](repeating: 0, count: count)
+            var grayHistogram = [Int](repeating: 0, count: 256)
+            for index in 0..<count {
+                let offset = index * 4
+                let gray = (Int(raster.rgba[offset]) * 77 + Int(raster.rgba[offset + 1]) * 150
+                    + Int(raster.rgba[offset + 2]) * 29) >> 8
+                grayValues[index] = gray
+                grayHistogram[gray] += 1
+            }
+            let localBase = percentile(grayHistogram, fraction: 0.35)
+            // Keep a bounded contrast floor so a dark desk/keyboard cannot
+            // become one giant "surface" component. The floor is derived
+            // from this image's local histogram, never from the production
+            // white-level threshold used by Pip extraction.
+            let adaptiveThreshold = max(36, min(150, localBase + 18))
+            var adaptiveMask = [UInt8](repeating: 0, count: count)
+            for index in 0..<count {
+                let offset = index * 4
+                let bright = Int(max(raster.rgba[offset], raster.rgba[offset + 1], raster.rgba[offset + 2]))
+                let dark = Int(min(raster.rgba[offset], raster.rgba[offset + 1], raster.rgba[offset + 2]))
+                let saturation = 255 * (bright - dark) / max(1, bright)
+                if grayValues[index] >= adaptiveThreshold && saturation < 100 {
+                    adaptiveMask[index] = 1
+                }
+            }
+            plausible = components(adaptiveMask, width: raster.width, height: raster.height,
+                                   purpose: "surfaceAdaptive", raster: raster)
+                .filter {
+                    // Reject scene-sized bright regions (desk, keyboard,
+                    // wall) before they can become a card proposal. A card
+                    // surface may be partial, but it must remain a bounded
+                    // region in both dimensions.
+                    let bounded = $0.bounds.width <= CGFloat(raster.width) * 0.85
+                        && $0.bounds.height <= CGFloat(raster.height) * 0.90
+                        && $0.pixels.count <= count * 0.70
+                    // Adaptive proposals use a smaller, explicit locator
+                    // floor because the card may be split by a hand/shadow;
+                    // the production surface threshold remains unchanged.
+                    return bounded && $0.pixels.count >= max(120, count / 300)
+                }
+                .sorted { $0.pixels.count > $1.pixels.count }
+            RecognitionTrace.current?.event("surface", ["state": "adaptiveMask",
+                "localBase": localBase, "adaptiveThreshold": adaptiveThreshold,
+                "componentCount": plausible.count])
+        }
         if RecognitionTrace.current != nil {
             for component in plausible.dropFirst(6) {
                 traceComponent(component, stage: "surface", fields: ["state": "rejected",
@@ -947,6 +1040,25 @@ final class PartialCardFeatureExtractor {
         let area = intersection.width * intersection.height
         let union = first.width * first.height + second.width * second.height - area
         return union > 0 ? area / union : 0
+    }
+
+    /// Vision's minimumSize is relative to the image's smallest dimension.
+    /// A proposal occupying only a small fraction of the frame is almost
+    /// always an internal printed mark in this pipeline. Keep it as evidence,
+    /// but do not let it become a full card candidate.
+    private static func isInternalSymbolProposal(_ box: CGRect, imageExtent: CGRect) -> Bool {
+        let frameArea = max(1, imageExtent.width * imageExtent.height)
+        let fraction = Double(max(0, box.width * box.height) / frameArea)
+        return fraction < 0.025
+    }
+
+    /// Construct a conservative context window around an internal symbol.
+    /// The result is explicitly partial; no synthetic corners are introduced.
+    private static func expandedSurfaceBox(_ box: CGRect) -> CGRect {
+        let width = min(0.62, max(box.width * 3.8, 0.24))
+        let height = min(0.72, max(box.height * 4.8, 0.34))
+        return CGRect(x: box.midX - width / 2, y: box.midY - height / 2,
+                      width: width, height: height)
     }
 
     private static func makeReferences() -> [String: [Bool]] {
