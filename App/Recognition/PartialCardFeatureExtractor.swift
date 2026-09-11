@@ -1053,7 +1053,10 @@ final class PartialCardFeatureExtractor {
         // single pip. Larger rectangles remain eligible for the existing
         // synthetic/full-card path and are validated by the normal aspect and
         // evidence stages.
-        return fraction < 0.012
+        let aspect = box.height > 0 ? box.width / box.height : 0
+        // The observed pip rectangles are short, wide quadrilaterals. Keep
+        // ordinary card-shaped synthetic/full proposals on the legacy path.
+        return fraction < 0.012 && aspect > 1.5
     }
 
     /// Construct a conservative context window around an internal symbol.
