@@ -3,8 +3,8 @@ import XCTest
 @testable import CardScanMagic
 
 final class CameraCapturePolicyTests: XCTestCase {
-    func testPrefers120Then60Then30FPS() {
-        XCTAssertEqual(CameraCapturePolicy.preferredFrameRates, [120, 60, 30])
+    func testPrefers60Then30Then120FPSForLowLightCapture() {
+        XCTAssertEqual(CameraCapturePolicy.preferredFrameRates, [60, 30, 120])
 
         let selected = CameraCapturePolicy.preferredFormat(from: [
             CameraFormatOption(index: 0, width: 1920, height: 1080, frameRate: 30),

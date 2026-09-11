@@ -9,7 +9,10 @@ struct CameraFormatOption: Equatable {
 }
 
 enum CameraCapturePolicy {
-    static let preferredFrameRates = [120, 60, 30]
+    // 120 FPS caps exposure at roughly 8.3 ms and makes indoor scenes
+    // visibly dark. 60 FPS still captures fast card motion while leaving
+    // twice the exposure budget; 120 FPS remains a hardware fallback.
+    static let preferredFrameRates = [60, 30, 120]
     static let preferredWidth: Int32 = 1920
     static let preferredHeight: Int32 = 1080
 

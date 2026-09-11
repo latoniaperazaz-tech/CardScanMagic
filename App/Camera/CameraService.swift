@@ -334,6 +334,9 @@ final class CameraService: NSObject {
         }
         if camera.isExposureModeSupported(.continuousAutoExposure) {
             camera.exposureMode = .continuousAutoExposure
+            if camera.isLowLightBoostSupported {
+                camera.automaticallyEnablesLowLightBoostWhenAvailable = true
+            }
             if let maximumExposure = CameraCapturePolicy.clampedMaximumExposureDuration(
                 minimum: camera.activeFormat.minExposureDuration,
                 maximum: camera.activeFormat.maxExposureDuration,
