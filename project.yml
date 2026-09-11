@@ -47,15 +47,14 @@ targets:
     platform: iOS
     sources:
       - path: Tests
-    resources:
-      - path: Tests/Fixtures/FULL_recognition_input.json
-      - path: Tests/Fixtures/FULL_recognition_input_attachments.plist
-      - path: Tests/Fixtures/FULL_recognition_input_plane_0.bin
-      - path: Tests/Fixtures/FULL_recognition_input_plane_1.bin
-      - path: Tests/Fixtures/OCCLUDED_recognition_input.json
-      - path: Tests/Fixtures/OCCLUDED_recognition_input_attachments.plist
-      - path: Tests/Fixtures/OCCLUDED_recognition_input_plane_0.bin
-      - path: Tests/Fixtures/OCCLUDED_recognition_input_plane_1.bin
+        excludes:
+          - Fixtures
+          - Fixtures/**
+      # Keep lossless pixel planes in the Fixtures subdirectory expected by
+      # Bundle.url(forResource:withExtension:subdirectory:) in the tests.
+      - path: Tests/Fixtures
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: CardScanMagic
     settings:
