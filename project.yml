@@ -47,6 +47,8 @@ targets:
     platform: iOS
     sources:
       - path: Tests
+    resources:
+      - path: Tests/Fixtures
     dependencies:
       - target: CardScanMagic
     settings:

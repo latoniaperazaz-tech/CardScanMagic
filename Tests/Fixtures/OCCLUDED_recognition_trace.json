@@ -1,0 +1,4954 @@
+{
+  "artifacts" : [
+    "recognition_input_plane_0.bin",
+    "recognition_input_plane_1.bin",
+    "recognition_input.json",
+    "recognition_input_attachments.plist",
+    "recognition_input.jpg",
+    "roi.jpg",
+    "rectified_0.jpg",
+    "rectified_1.jpg",
+    "rectified_2.jpg",
+    "surface_input.jpg",
+    "candidate_1.jpg",
+    "pip_overlay_1.jpg"
+  ],
+  "artifactStates" : [
+    {
+      "artifact" : "recognition_input",
+      "losslessMetadataComplete" : true,
+      "state" : "saved"
+    },
+    {
+      "artifact" : "roi.jpg",
+      "state" : "saved"
+    },
+    {
+      "artifact" : "rectified_0.jpg",
+      "state" : "saved"
+    },
+    {
+      "artifact" : "rectified_1.jpg",
+      "state" : "saved"
+    },
+    {
+      "artifact" : "rectified_2.jpg",
+      "state" : "saved"
+    },
+    {
+      "artifact" : "surface_input.jpg",
+      "state" : "saved"
+    },
+    {
+      "artifact" : "candidate_1.jpg",
+      "state" : "saved"
+    },
+    {
+      "artifact" : "pip_overlay_1.jpg",
+      "state" : "saved"
+    }
+  ],
+  "callCounts" : {
+    "classify" : 1,
+    "coreML" : 3,
+    "extractor" : 1,
+    "fusion" : 2,
+    "ocr" : 2
+  },
+  "candidateProposalCount" : 3,
+  "captureWindowIDs" : [
+    "7"
+  ],
+  "entries" : [
+    {
+      "height" : 1176,
+      "orientation" : 1,
+      "original" : {
+        "originalHeight" : 1920,
+        "originalWidth" : 1080,
+        "scaleFactor" : 0.61250000000000004,
+        "scaleX" : 0.61111111111111116,
+        "scaleY" : 0.61250000000000004,
+        "snapshotHeight" : 1176,
+        "snapshotWidth" : 660,
+        "timestamp" : 398765.35772024997
+      },
+      "source" : "snapshot",
+      "stage" : "recognitionSelected",
+      "testLabel" : "OCCLUDED 9C",
+      "timestamp" : 398765.35772024997,
+      "uptime" : 398765.3865542917,
+      "width" : 660
+    },
+    {
+      "height" : 1176,
+      "metadataComplete" : true,
+      "orientation" : 1,
+      "pixelFormat" : 875704422,
+      "stage" : "losslessInput",
+      "unsupportedAttachments" : [
+
+      ],
+      "uptime" : 398765.38780154171,
+      "width" : 660
+    },
+    {
+      "height" : 1176,
+      "orientation" : 1,
+      "pixelFormat" : 875704422,
+      "stage" : "engine.input",
+      "status" : "started",
+      "uptime" : 398765.38780933333,
+      "width" : 660
+    },
+    {
+      "observations" : [
+
+      ],
+      "region" : null,
+      "stage" : "engine.modelObservations",
+      "uptime" : 398765.39493341668
+    },
+    {
+      "modelDetections" : [
+
+      ],
+      "region" : null,
+      "stage" : "engine.modelPass",
+      "uptime" : 398765.39494079171
+    },
+    {
+      "modelDetections" : [
+
+      ],
+      "pass" : "full",
+      "stage" : "engine.model",
+      "uptime" : 398765.3949435
+    },
+    {
+      "inputExtent" : {
+        "height" : 1176,
+        "width" : 660,
+        "x" : 0,
+        "y" : 0
+      },
+      "stage" : "extractor",
+      "state" : "started",
+      "uptime" : 398765.39497612504
+    },
+    {
+      "extent" : {
+        "height" : 640,
+        "width" : 360,
+        "x" : 0,
+        "y" : 0
+      },
+      "stage" : "extractor",
+      "state" : "workingImage",
+      "uptime" : 398765.39614775003
+    },
+    {
+      "candidateID" : 0,
+      "stage" : "candidate",
+      "state" : "proposed",
+      "uptime" : 398765.40565725003
+    },
+    {
+      "boundingBox" : {
+        "height" : 0.064067095518112183,
+        "width" : 0.11274051666259766,
+        "x" : 0.7317461371421814,
+        "y" : 0.26418733596801758
+      },
+      "candidateID" : 0,
+      "cardSurfaceScore" : null,
+      "cardSurfaceScoreState" : "notComputed",
+      "localizationConfidence" : 1,
+      "preRectificationImage" : null,
+      "preRectificationImageState" : "notRun",
+      "source" : "visionRectangle",
+      "stage" : "candidate",
+      "state" : "detected",
+      "uptime" : 398765.40566187503
+    },
+    {
+      "bottomLeft" : {
+        "x" : 0.75262528657913208,
+        "y" : 0.26418733596801758
+      },
+      "bottomRight" : {
+        "x" : 0.84448665380477905,
+        "y" : 0.27951368689537048
+      },
+      "candidateID" : 0,
+      "cornerCoordinateSpace" : "normalized_working_image_y_up",
+      "preRectificationExtent" : {
+        "height" : 640,
+        "width" : 360,
+        "x" : 0,
+        "y" : 0
+      },
+      "preRectificationImage" : "roi.jpg",
+      "preRectificationImageState" : "observed",
+      "stage" : "candidate",
+      "state" : "rectificationInput",
+      "topLeft" : {
+        "x" : 0.7317461371421814,
+        "y" : 0.32825443148612976
+      },
+      "topRight" : {
+        "x" : 0.83545893430709839,
+        "y" : 0.3271181583404541
+      },
+      "uptime" : 398765.4056725417
+    },
+    {
+      "aspect" : 0.90196078431372551,
+      "candidateID" : 0,
+      "reason" : "RECTIFIED_ASPECT",
+      "reasonCode" : "RECTIFIED_ASPECT",
+      "stage" : "candidate",
+      "state" : "rejected",
+      "uptime" : 398765.40642012504
+    },
+    {
+      "candidateID" : 1,
+      "stage" : "candidate",
+      "state" : "proposed",
+      "uptime" : 398765.40642470837
+    },
+    {
+      "boundingBox" : {
+        "height" : 0.072452008724212646,
+        "width" : 0.1346813440322876,
+        "x" : 0.6145169734954834,
+        "y" : 0.5323067307472229
+      },
+      "candidateID" : 1,
+      "cardSurfaceScore" : null,
+      "cardSurfaceScoreState" : "notComputed",
+      "localizationConfidence" : 1,
+      "preRectificationImage" : null,
+      "preRectificationImageState" : "notRun",
+      "source" : "visionRectangle",
+      "stage" : "candidate",
+      "state" : "detected",
+      "uptime" : 398765.40642737504
+    },
+    {
+      "bottomLeft" : {
+        "x" : 0.70675575733184814,
+        "y" : 0.5323067307472229
+      },
+      "bottomRight" : {
+        "x" : 0.749198317527771,
+        "y" : 0.58112519979476929
+      },
+      "candidateID" : 1,
+      "cornerCoordinateSpace" : "normalized_working_image_y_up",
+      "preRectificationExtent" : {
+        "height" : 640,
+        "width" : 360,
+        "x" : 0,
+        "y" : 0
+      },
+      "preRectificationImage" : "roi.jpg",
+      "preRectificationImageState" : "observed",
+      "stage" : "candidate",
+      "state" : "rectificationInput",
+      "topLeft" : {
+        "x" : 0.6145169734954834,
+        "y" : 0.5706639289855957
+      },
+      "topRight" : {
+        "x" : 0.69689863920211792,
+        "y" : 0.60475873947143555
+      },
+      "uptime" : 398765.40643566666
+    },
+    {
+      "candidateID" : 2,
+      "stage" : "candidate",
+      "state" : "proposed",
+      "uptime" : 398765.40697058337
+    },
+    {
+      "boundingBox" : {
+        "height" : 0.069059789180755615,
+        "width" : 0.14062714576721191,
+        "x" : 0.41478234529495239,
+        "y" : 0.51409566402435303
+      },
+      "candidateID" : 2,
+      "cardSurfaceScore" : null,
+      "cardSurfaceScoreState" : "notComputed",
+      "localizationConfidence" : 1,
+      "preRectificationImage" : null,
+      "preRectificationImageState" : "notRun",
+      "source" : "visionRectangle",
+      "stage" : "candidate",
+      "state" : "detected",
+      "uptime" : 398765.40697387501
+    },
+    {
+      "bottomLeft" : {
+        "x" : 0.41478234529495239,
+        "y" : 0.54881316423416138
+      },
+      "bottomRight" : {
+        "x" : 0.4786054790019989,
+        "y" : 0.51409566402435303
+      },
+      "candidateID" : 2,
+      "cornerCoordinateSpace" : "normalized_working_image_y_up",
+      "preRectificationExtent" : {
+        "height" : 640,
+        "width" : 360,
+        "x" : 0,
+        "y" : 0
+      },
+      "preRectificationImage" : "roi.jpg",
+      "preRectificationImageState" : "observed",
+      "stage" : "candidate",
+      "state" : "rectificationInput",
+      "topLeft" : {
+        "x" : 0.49216783046722412,
+        "y" : 0.58315545320510864
+      },
+      "topRight" : {
+        "x" : 0.55540949106216431,
+        "y" : 0.54392355680465698
+      },
+      "uptime" : 398765.40698312502
+    },
+    {
+      "aspect" : 0.94736842105263153,
+      "candidateID" : 2,
+      "reason" : "RECTIFIED_ASPECT",
+      "reasonCode" : "RECTIFIED_ASPECT",
+      "stage" : "candidate",
+      "state" : "rejected",
+      "uptime" : 398765.40760558337
+    },
+    {
+      "brightnessFloor" : 125,
+      "height" : 320,
+      "stage" : "surface",
+      "state" : "mask",
+      "uptime" : 398765.40930566669,
+      "width" : 180
+    },
+    {
+      "area" : 2,
+      "aspect" : 1,
+      "boundingBox" : {
+        "height" : 2,
+        "width" : 2,
+        "x" : 72,
+        "y" : 1
+      },
+      "center" : {
+        "x" : 72.5,
+        "y" : 1.5
+      },
+      "color" : null,
+      "componentID" : 1,
+      "coordinateSpace" : "surfaceRasterPixelsTopLeft",
+      "estimatorInput" : null,
+      "estimatorInputState" : "notEvaluated",
+      "fill" : 0.5,
+      "meanLuma" : 115,
+      "purpose" : "surface",
+      "rasterHeight" : 320,
+      "rasterWidth" : 180,
+      "shapeScores" : null,
+      "shapeState" : "notRun",
+      "stage" : "componentDetected",
+      "uptime" : 398765.409311875
+    },
+    {
+      "area" : 2,
+      "componentID" : 1,
+      "estimatorInput" : false,
+      "purpose" : "surface",
+      "reason" : "COMPONENT_MIN_PIXELS",
+      "reasonCode" : "COMPONENT_MIN_PIXELS",
+      "stage" : "componentFiltered",
+      "uptime" : 398765.4093216667
+    },
+    {
+      "area" : 1,
+      "aspect" : 1,
+      "boundingBox" : {
+        "height" : 1,
+        "width" : 1,
+        "x" : 77,
+        "y" : 15
+      },
+      "center" : {
+        "x" : 77,
+        "y" : 15
+      },
+      "color" : null,
+      "componentID" : 2,
+      "coordinateSpace" : "surfaceRasterPixelsTopLeft",
+      "estimatorInput" : null,
+      "estimatorInputState" : "notEvaluated",
+      "fill" : 1,
+      "meanLuma" : 115,
+      "purpose" : "surface",
+      "rasterHeight" : 320,
+      "rasterWidth" : 180,
+      "shapeScores" : null,
+      "shapeState" : "notRun",
+      "stage" : "componentDetected",
+      "uptime" : 398765.40932733339
+    },
+    {
+      "area" : 1,
+      "componentID" : 2,
+      "estimatorInput" : false,
+      "purpose" : "surface",
+      "reason" : "COMPONENT_MIN_PIXELS",
+      "reasonCode" : "COMPONENT_MIN_PIXELS",
+      "stage" : "componentFiltered",
+      "uptime" : 398765.40933491668
+    },
+    {
+      "candidateCount" : 0,
+      "reason" : "NO_CARD_SURFACE",
+      "reasonCode" : "NO_CARD_SURFACE",
+      "stage" : "surface",
+      "state" : "completed",
+      "uptime" : 398765.409356875
+    },
+    {
+      "candidateCount" : 1,
+      "stage" : "extractor",
+      "state" : "candidatesCreated",
+      "uptime" : 398765.40935912501
+    },
+    {
+      "boundingBox" : {
+        "height" : 0.072452008724212646,
+        "width" : 0.1346813440322876,
+        "x" : 0.6145169734954834,
+        "y" : 0.5323067307472229
+      },
+      "candidateID" : 1,
+      "extent" : {
+        "height" : 63,
+        "width" : 44,
+        "x" : 0,
+        "y" : 0
+      },
+      "localizationConfidence" : 1,
+      "source" : "visionRectangle",
+      "stage" : "candidate",
+      "state" : "processing",
+      "uptime" : 398765.40936254169,
+      "visibleRegion" : "full"
+    },
+    {
+      "area" : 1543,
+      "aspect" : 0.7142857142857143,
+      "boundingBox" : {
+        "height" : 56,
+        "width" : 40,
+        "x" : 3,
+        "y" : 3
+      },
+      "candidateID" : 1,
+      "center" : {
+        "x" : 19.390149060272197,
+        "y" : 27.607258587167856
+      },
+      "color" : null,
+      "componentID" : 3,
+      "coordinateSpace" : "candidateRasterPixelsTopLeft",
+      "estimatorInput" : null,
+      "estimatorInputState" : "notEvaluated",
+      "fill" : 0.68883928571428577,
+      "meanLuma" : 6.1795204147764098,
+      "purpose" : "uncertainty",
+      "rasterHeight" : 63,
+      "rasterWidth" : 44,
+      "shapeScores" : null,
+      "shapeState" : "notRun",
+      "stage" : "componentDetected",
+      "uptime" : 398765.41048133338
+    },
+    {
+      "candidateID" : 1,
+      "color" : "black",
+      "colorShapeTop1" : 0.58080194410692587,
+      "colorShapeTop2" : 0.57692307692307687,
+      "componentID" : 3,
+      "purpose" : "uncertainty",
+      "shapeConfidence" : 0.00072741851593968818,
+      "shapeMargin" : 0.0038788671838489996,
+      "shapeScores" : {
+        "club" : 0.58080194410692587,
+        "diamond" : 0.49621212121212122,
+        "heart" : 0.63252240717029451,
+        "spade" : 0.57692307692307687
+      },
+      "shapeSimilarity" : 0.58080194410692587,
+      "stage" : "componentShape",
+      "state" : "evaluated",
+      "suitProbabilities" : {
+        "club" : 0.48868547284639613,
+        "diamond" : 0.0078556343495897636,
+        "heart" : 0.035185855568698736,
+        "spade" : 0.46827303723531533
+      },
+      "uptime" : 398765.41058266669
+    },
+    {
+      "candidateID" : 1,
+      "componentID" : 3,
+      "purpose" : "uncertainty",
+      "shapeConfidence" : 0.00072741851593968818,
+      "shapeSimilarity" : 0.58080194410692587,
+      "stage" : "uncertainty",
+      "state" : "foreground",
+      "uptime" : 398765.41059008334
+    },
+    {
+      "candidateID" : 1,
+      "componentState" : "notRun",
+      "darkThreshold" : null,
+      "detectedCount" : null,
+      "reason" : "PIP_WHITE_LEVEL",
+      "reasonCode" : "PIP_WHITE_LEVEL",
+      "retainedCount" : null,
+      "stage" : "pipSummary",
+      "state" : "rejected",
+      "uptime" : 398765.41060291667,
+      "whiteLevel" : 53
+    },
+    {
+      "candidateID" : 1,
+      "observationCount" : 0,
+      "orientation" : 1,
+      "stage" : "ocr",
+      "state" : "requestCompleted",
+      "uptime" : 398765.4146586667
+    },
+    {
+      "candidateID" : 1,
+      "observationCount" : 0,
+      "orientation" : 3,
+      "stage" : "ocr",
+      "state" : "requestCompleted",
+      "uptime" : 398765.41823033337
+    },
+    {
+      "candidateID" : 1,
+      "confidence" : 0,
+      "margin" : null,
+      "marginState" : "notEvaluated",
+      "parsedRank" : null,
+      "ranks" : {
+
+      },
+      "reason" : "OCR_NIL",
+      "reasonCode" : "OCR_NIL",
+      "stage" : "ocr",
+      "state" : "completed",
+      "uptime" : 398765.41823445837
+    },
+    {
+      "bodyFilterState" : "notRun",
+      "bodyPipCount" : null,
+      "candidateID" : 1,
+      "clippedCollectionState" : "notRun",
+      "clippedPipCandidates" : null,
+      "componentState" : "notRun",
+      "detectedCount" : null,
+      "estimatorComponentIDs" : null,
+      "estimatorInput" : null,
+      "estimatorState" : "notRun",
+      "reason" : "NO_PIPS_AND_OCR_NIL",
+      "reasonCode" : "NO_PIPS_AND_OCR_NIL",
+      "retainedCount" : 0,
+      "stage" : "pipSummary",
+      "state" : "candidateRejected",
+      "uncertainRegions" : [
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.875
+        }
+      ],
+      "uptime" : 398765.4182739167,
+      "visibleRegion" : "full"
+    },
+    {
+      "candidateID" : 1,
+      "featureProduced" : false,
+      "pipCount" : 0,
+      "reason" : "NO_PIPS_AND_OCR_NIL",
+      "reasonCode" : "NO_PIPS_AND_OCR_NIL",
+      "stage" : "candidate",
+      "state" : "rejected",
+      "suitState" : "notRun",
+      "uncertainRegions" : [
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.0625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.1875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.25
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.3125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.4375
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.625,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.5
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.6875,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.5625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.625
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.0625,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.75,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.875,
+          "y" : 0.6875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5625,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.8125,
+          "y" : 0.75
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.125,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.4375,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.5,
+          "y" : 0.8125
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.1875,
+          "y" : 0.875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.25,
+          "y" : 0.875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.3125,
+          "y" : 0.875
+        },
+        {
+          "height" : 0.0625,
+          "width" : 0.0625,
+          "x" : 0.375,
+          "y" : 0.875
+        }
+      ],
+      "uptime" : 398765.41848495835
+    },
+    {
+      "candidateCount" : 1,
+      "featureCount" : 0,
+      "reason" : "COMPLETED",
+      "reasonCode" : "COMPLETED",
+      "stage" : "extractor",
+      "state" : "completed",
+      "uptime" : 398765.41986316669
+    },
+    {
+      "fusionPass" : "first",
+      "height" : 1176,
+      "localCount" : 0,
+      "modelDetections" : [
+
+      ],
+      "stage" : "fusion.input",
+      "uptime" : 398765.41988416668,
+      "width" : 660
+    },
+    {
+      "fusionPass" : "first",
+      "passed" : true,
+      "reason" : "IMAGE_WIDTH_INVALID",
+      "stage" : "fusion.check",
+      "status" : "evaluated",
+      "uptime" : 398765.41988733335
+    },
+    {
+      "fusionPass" : "first",
+      "passed" : true,
+      "reason" : "IMAGE_HEIGHT_INVALID",
+      "stage" : "fusion.check",
+      "status" : "evaluated",
+      "uptime" : 398765.41988941666
+    },
+    {
+      "fusionPass" : "first",
+      "passed" : true,
+      "reason" : "IMAGE_WIDTH_NONPOSITIVE",
+      "stage" : "fusion.check",
+      "status" : "evaluated",
+      "uptime" : 398765.4198910417
+    },
+    {
+      "fusionPass" : "first",
+      "passed" : true,
+      "reason" : "IMAGE_HEIGHT_NONPOSITIVE",
+      "stage" : "fusion.check",
+      "status" : "evaluated",
+      "uptime" : 398765.41989262501
+    },
+    {
+      "finalDetections" : [
+
+      ],
+      "fusedDetectionCount" : 0,
+      "fusionPass" : "first",
+      "reason" : "NO_FINAL_DETECTION",
+      "reasonCode" : "NO_FINAL_DETECTION",
+      "stage" : "fusion.result",
+      "status" : "completed",
+      "uptime" : 398765.41989629169,
+      "usableLocalCount" : 0,
+      "usableModelCount" : 0
+    },
+    {
+      "fusionPass" : "first",
+      "stage" : "engine.nearFallback",
+      "status" : "started",
+      "uptime" : 398765.419899375
+    },
+    {
+      "fusionPass" : "first",
+      "observations" : [
+
+      ],
+      "region" : {
+        "height" : 0.5625,
+        "width" : 1,
+        "x" : 0,
+        "y" : 0
+      },
+      "stage" : "engine.modelObservations",
+      "uptime" : 398765.43013895839
+    },
+    {
+      "fusionPass" : "first",
+      "modelDetections" : [
+
+      ],
+      "region" : {
+        "height" : 0.5625,
+        "width" : 1,
+        "x" : 0,
+        "y" : 0
+      },
+      "stage" : "engine.modelPass",
+      "uptime" : 398765.43014920835
+    },
+    {
+      "fusionPass" : "first",
+      "observations" : [
+
+      ],
+      "region" : {
+        "height" : 0.5625,
+        "width" : 1,
+        "x" : 0,
+        "y" : 0.4375
+      },
+      "stage" : "engine.modelObservations",
+      "uptime" : 398765.43015270837
+    },
+    {
+      "fusionPass" : "first",
+      "modelDetections" : [
+
+      ],
+      "region" : {
+        "height" : 0.5625,
+        "width" : 1,
+        "x" : 0,
+        "y" : 0.4375
+      },
+      "stage" : "engine.modelPass",
+      "uptime" : 398765.43015550001
+    },
+    {
+      "fusionPass" : "first",
+      "modelDetections" : [
+
+      ],
+      "pass" : "combined",
+      "stage" : "engine.model",
+      "uptime" : 398765.43015820836
+    },
+    {
+      "fusionPass" : "final",
+      "height" : 1176,
+      "localCount" : 0,
+      "modelDetections" : [
+
+      ],
+      "stage" : "fusion.input",
+      "uptime" : 398765.43016154168,
+      "width" : 660
+    },
+    {
+      "fusionPass" : "final",
+      "passed" : true,
+      "reason" : "IMAGE_WIDTH_INVALID",
+      "stage" : "fusion.check",
+      "status" : "evaluated",
+      "uptime" : 398765.430164625
+    },
+    {
+      "fusionPass" : "final",
+      "passed" : true,
+      "reason" : "IMAGE_HEIGHT_INVALID",
+      "stage" : "fusion.check",
+      "status" : "evaluated",
+      "uptime" : 398765.43016666669
+    },
+    {
+      "fusionPass" : "final",
+      "passed" : true,
+      "reason" : "IMAGE_WIDTH_NONPOSITIVE",
+      "stage" : "fusion.check",
+      "status" : "evaluated",
+      "uptime" : 398765.43016833335
+    },
+    {
+      "fusionPass" : "final",
+      "passed" : true,
+      "reason" : "IMAGE_HEIGHT_NONPOSITIVE",
+      "stage" : "fusion.check",
+      "status" : "evaluated",
+      "uptime" : 398765.43017012504
+    },
+    {
+      "finalDetections" : [
+
+      ],
+      "fusedDetectionCount" : 0,
+      "fusionPass" : "final",
+      "reason" : "NO_FINAL_DETECTION",
+      "reasonCode" : "NO_FINAL_DETECTION",
+      "stage" : "fusion.result",
+      "status" : "completed",
+      "uptime" : 398765.43017437501,
+      "usableLocalCount" : 0,
+      "usableModelCount" : 0
+    },
+    {
+      "finalDetections" : [
+
+      ],
+      "fusionPass" : "final",
+      "reasonCode" : "NO_FINAL_DETECTION",
+      "stage" : "engine.final",
+      "status" : "completed",
+      "uptime" : 398765.43017775001
+    },
+    {
+      "checkpointTimestamp" : null,
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594349146060699",
+      "evidenceTimestamp" : 398765.35772024997,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "stage" : "timeline.input",
+      "uptime" : 398765.43032462505
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317055966291",
+      "evidenceRecognitionID" : "4FA5B29A-F458-471C-8650-2243615BD1AE",
+      "evidenceTimestamp" : 398763.48983091599,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43033841671
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317055966291",
+      "evidenceRecognitionID" : "4FA5B29A-F458-471C-8650-2243615BD1AE",
+      "evidenceTimestamp" : 398763.48983091599,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.48983091599,
+      "uptime" : 398765.43034183333
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317055966291",
+      "evidenceRecognitionID" : "4FA5B29A-F458-471C-8650-2243615BD1AE",
+      "evidenceTimestamp" : 398763.48983091599,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43034512503
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317055966291",
+      "evidenceRecognitionID" : "4FA5B29A-F458-471C-8650-2243615BD1AE",
+      "evidenceTimestamp" : 398763.48983091599,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43034995836
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317342484281",
+      "evidenceRecognitionID" : "01B1C45E-0575-4515-B82B-5406D2A95A11",
+      "evidenceTimestamp" : 398763.506508458,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43035420834
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317342484281",
+      "evidenceRecognitionID" : "01B1C45E-0575-4515-B82B-5406D2A95A11",
+      "evidenceTimestamp" : 398763.506508458,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.506508458,
+      "uptime" : 398765.43035625003
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317342484281",
+      "evidenceRecognitionID" : "01B1C45E-0575-4515-B82B-5406D2A95A11",
+      "evidenceTimestamp" : 398763.506508458,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43035883334
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317342484281",
+      "evidenceRecognitionID" : "01B1C45E-0575-4515-B82B-5406D2A95A11",
+      "evidenceTimestamp" : 398763.506508458,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43036095833
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317485742915",
+      "evidenceRecognitionID" : "11F5A446-FB27-42F7-9503-1FC1DD569EB8",
+      "evidenceTimestamp" : 398763.51484720799,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43036466668
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317485742915",
+      "evidenceRecognitionID" : "11F5A446-FB27-42F7-9503-1FC1DD569EB8",
+      "evidenceTimestamp" : 398763.51484720799,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.51484720799,
+      "uptime" : 398765.43036675005
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317485742915",
+      "evidenceRecognitionID" : "11F5A446-FB27-42F7-9503-1FC1DD569EB8",
+      "evidenceTimestamp" : 398763.51484720799,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43036908336
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317485742915",
+      "evidenceRecognitionID" : "11F5A446-FB27-42F7-9503-1FC1DD569EB8",
+      "evidenceTimestamp" : 398763.51484720799,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.430371125
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317629002975",
+      "evidenceRecognitionID" : "406E2D4C-80CE-4EA4-AC48-314B68D4A0B7",
+      "evidenceTimestamp" : 398763.52318604098,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43037445837
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317629002975",
+      "evidenceRecognitionID" : "406E2D4C-80CE-4EA4-AC48-314B68D4A0B7",
+      "evidenceTimestamp" : 398763.52318604098,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.52318604098,
+      "uptime" : 398765.43037770834
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317629002975",
+      "evidenceRecognitionID" : "406E2D4C-80CE-4EA4-AC48-314B68D4A0B7",
+      "evidenceTimestamp" : 398763.52318604098,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43038016668
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317629002975",
+      "evidenceRecognitionID" : "406E2D4C-80CE-4EA4-AC48-314B68D4A0B7",
+      "evidenceTimestamp" : 398763.52318604098,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43038245838
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317772261609",
+      "evidenceRecognitionID" : "1AC8318A-4BCD-417D-ADC5-A66CE4AE5AD3",
+      "evidenceTimestamp" : 398763.53152479097,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43038562505
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317772261609",
+      "evidenceRecognitionID" : "1AC8318A-4BCD-417D-ADC5-A66CE4AE5AD3",
+      "evidenceTimestamp" : 398763.53152479097,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.53152479097,
+      "uptime" : 398765.43038770836
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317772261609",
+      "evidenceRecognitionID" : "1AC8318A-4BCD-417D-ADC5-A66CE4AE5AD3",
+      "evidenceTimestamp" : 398763.53152479097,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43038983335
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317772261609",
+      "evidenceRecognitionID" : "1AC8318A-4BCD-417D-ADC5-A66CE4AE5AD3",
+      "evidenceTimestamp" : 398763.53152479097,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43039187504
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317915522391",
+      "evidenceRecognitionID" : "4E64111E-4E5F-43BD-BB4A-97FED729AAD8",
+      "evidenceTimestamp" : 398763.539863666,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43039570836
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317915522391",
+      "evidenceRecognitionID" : "4E64111E-4E5F-43BD-BB4A-97FED729AAD8",
+      "evidenceTimestamp" : 398763.539863666,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.539863666,
+      "uptime" : 398765.43039770838
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594317915522391",
+      "evidenceRecognitionID" : "4E64111E-4E5F-43BD-BB4A-97FED729AAD8",
+      "evidenceTimestamp" : 398763.539863666,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43039995834
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594317915522391",
+      "evidenceRecognitionID" : "4E64111E-4E5F-43BD-BB4A-97FED729AAD8",
+      "evidenceTimestamp" : 398763.539863666,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43040191667
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318058780321",
+      "evidenceRecognitionID" : "D6B8EC27-EDC3-4CA0-8BFD-2E89A1694559",
+      "evidenceTimestamp" : 398763.54820237501,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43040533335
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318058780321",
+      "evidenceRecognitionID" : "D6B8EC27-EDC3-4CA0-8BFD-2E89A1694559",
+      "evidenceTimestamp" : 398763.54820237501,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.54820237501,
+      "uptime" : 398765.43040733336
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318058780321",
+      "evidenceRecognitionID" : "D6B8EC27-EDC3-4CA0-8BFD-2E89A1694559",
+      "evidenceTimestamp" : 398763.54820237501,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.4304095417
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318058780321",
+      "evidenceRecognitionID" : "D6B8EC27-EDC3-4CA0-8BFD-2E89A1694559",
+      "evidenceTimestamp" : 398763.54820237501,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43041154172
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318202014611",
+      "evidenceRecognitionID" : "DE8D334D-C9F2-4C46-ADCB-5AC3D85FF732",
+      "evidenceTimestamp" : 398763.55653970799,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43041475001
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318202014611",
+      "evidenceRecognitionID" : "DE8D334D-C9F2-4C46-ADCB-5AC3D85FF732",
+      "evidenceTimestamp" : 398763.55653970799,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.55653970799,
+      "uptime" : 398765.43041675002
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318202014611",
+      "evidenceRecognitionID" : "DE8D334D-C9F2-4C46-ADCB-5AC3D85FF732",
+      "evidenceTimestamp" : 398763.55653970799,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43041954166
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318202014611",
+      "evidenceRecognitionID" : "DE8D334D-C9F2-4C46-ADCB-5AC3D85FF732",
+      "evidenceTimestamp" : 398763.55653970799,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43042162503
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318345297589",
+      "evidenceRecognitionID" : "592AF08B-EF66-45D2-8A13-F9948346E5E5",
+      "evidenceTimestamp" : 398763.56487987499,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43042466667
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318345297589",
+      "evidenceRecognitionID" : "592AF08B-EF66-45D2-8A13-F9948346E5E5",
+      "evidenceTimestamp" : 398763.56487987499,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.56487987499,
+      "uptime" : 398765.43042662501
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318345297589",
+      "evidenceRecognitionID" : "592AF08B-EF66-45D2-8A13-F9948346E5E5",
+      "evidenceTimestamp" : 398763.56487987499,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43042879167
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318345297589",
+      "evidenceRecognitionID" : "592AF08B-EF66-45D2-8A13-F9948346E5E5",
+      "evidenceTimestamp" : 398763.56487987499,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43043070834
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318488559075",
+      "evidenceRecognitionID" : "EF605E41-08CF-4E03-A04E-E87161A50FDA",
+      "evidenceTimestamp" : 398763.57321879099,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43043425004
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318488559075",
+      "evidenceRecognitionID" : "EF605E41-08CF-4E03-A04E-E87161A50FDA",
+      "evidenceTimestamp" : 398763.57321879099,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.57321879099,
+      "uptime" : 398765.43043620838
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318488559075",
+      "evidenceRecognitionID" : "EF605E41-08CF-4E03-A04E-E87161A50FDA",
+      "evidenceTimestamp" : 398763.57321879099,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43043833337
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318488559075",
+      "evidenceRecognitionID" : "EF605E41-08CF-4E03-A04E-E87161A50FDA",
+      "evidenceTimestamp" : 398763.57321879099,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43044020835
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318631817709",
+      "evidenceRecognitionID" : "0683DBA7-951F-47F5-AB49-7F6587C8DDFE",
+      "evidenceTimestamp" : 398763.58155754098,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43044333335
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318631817709",
+      "evidenceRecognitionID" : "0683DBA7-951F-47F5-AB49-7F6587C8DDFE",
+      "evidenceTimestamp" : 398763.58155754098,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.58155754098,
+      "uptime" : 398765.43044533336
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318631817709",
+      "evidenceRecognitionID" : "0683DBA7-951F-47F5-AB49-7F6587C8DDFE",
+      "evidenceTimestamp" : 398763.58155754098,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.430447625
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318631817709",
+      "evidenceRecognitionID" : "0683DBA7-951F-47F5-AB49-7F6587C8DDFE",
+      "evidenceTimestamp" : 398763.58155754098,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43044954172
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318775077065",
+      "evidenceRecognitionID" : "7F345033-5900-4322-859D-1CE00E101890",
+      "evidenceTimestamp" : 398763.589896333,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43045266671
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318775077065",
+      "evidenceRecognitionID" : "7F345033-5900-4322-859D-1CE00E101890",
+      "evidenceTimestamp" : 398763.589896333,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.589896333,
+      "uptime" : 398765.43045458337
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318775077065",
+      "evidenceRecognitionID" : "7F345033-5900-4322-859D-1CE00E101890",
+      "evidenceTimestamp" : 398763.589896333,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43045670836
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318775077065",
+      "evidenceRecognitionID" : "7F345033-5900-4322-859D-1CE00E101890",
+      "evidenceTimestamp" : 398763.589896333,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43045862502
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318918335699",
+      "evidenceRecognitionID" : "83452917-02F2-4D94-9BC8-92422441E6E7",
+      "evidenceTimestamp" : 398763.59823508299,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43046158337
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318918335699",
+      "evidenceRecognitionID" : "83452917-02F2-4D94-9BC8-92422441E6E7",
+      "evidenceTimestamp" : 398763.59823508299,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.59823508299,
+      "uptime" : 398765.43046358338
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594318918335699",
+      "evidenceRecognitionID" : "83452917-02F2-4D94-9BC8-92422441E6E7",
+      "evidenceTimestamp" : 398763.59823508299,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43046570837
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594318918335699",
+      "evidenceRecognitionID" : "83452917-02F2-4D94-9BC8-92422441E6E7",
+      "evidenceTimestamp" : 398763.59823508299,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43046766671
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319061595759",
+      "evidenceRecognitionID" : "625B6A3E-D1AC-4D50-9FB4-3CE84EF97B9C",
+      "evidenceTimestamp" : 398763.60657391598,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43047066667
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319061595759",
+      "evidenceRecognitionID" : "625B6A3E-D1AC-4D50-9FB4-3CE84EF97B9C",
+      "evidenceTimestamp" : 398763.60657391598,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.60657391598,
+      "uptime" : 398765.43047262501
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319061595759",
+      "evidenceRecognitionID" : "625B6A3E-D1AC-4D50-9FB4-3CE84EF97B9C",
+      "evidenceTimestamp" : 398763.60657391598,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43047483335
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319061595759",
+      "evidenceRecognitionID" : "625B6A3E-D1AC-4D50-9FB4-3CE84EF97B9C",
+      "evidenceTimestamp" : 398763.60657391598,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43047675001
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319204854393",
+      "evidenceRecognitionID" : "A15BCD91-7CF7-459E-A836-C222B95991DB",
+      "evidenceTimestamp" : 398763.61491266597,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43047979171
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319204854393",
+      "evidenceRecognitionID" : "A15BCD91-7CF7-459E-A836-C222B95991DB",
+      "evidenceTimestamp" : 398763.61491266597,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.61491266597,
+      "uptime" : 398765.4304816667
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319204854393",
+      "evidenceRecognitionID" : "A15BCD91-7CF7-459E-A836-C222B95991DB",
+      "evidenceTimestamp" : 398763.61491266597,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43048425001
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319204854393",
+      "evidenceRecognitionID" : "A15BCD91-7CF7-459E-A836-C222B95991DB",
+      "evidenceTimestamp" : 398763.61491266597,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43048620835
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319348113028",
+      "evidenceRecognitionID" : "D8229A65-9FC9-41C1-AE82-8DEDD1E0965D",
+      "evidenceTimestamp" : 398763.62325141602,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43048925005
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319348113028",
+      "evidenceRecognitionID" : "D8229A65-9FC9-41C1-AE82-8DEDD1E0965D",
+      "evidenceTimestamp" : 398763.62325141602,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.62325141602,
+      "uptime" : 398765.43049112504
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319348113028",
+      "evidenceRecognitionID" : "D8229A65-9FC9-41C1-AE82-8DEDD1E0965D",
+      "evidenceTimestamp" : 398763.62325141602,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43049350003
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319348113028",
+      "evidenceRecognitionID" : "D8229A65-9FC9-41C1-AE82-8DEDD1E0965D",
+      "evidenceTimestamp" : 398763.62325141602,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43049558334
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319491372383",
+      "evidenceRecognitionID" : "ECEAD0CF-75CB-4080-AA33-33EFBA32583A",
+      "evidenceTimestamp" : 398763.63159020798,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43049883336
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319491372383",
+      "evidenceRecognitionID" : "ECEAD0CF-75CB-4080-AA33-33EFBA32583A",
+      "evidenceTimestamp" : 398763.63159020798,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.63159020798,
+      "uptime" : 398765.4305007917
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319491372383",
+      "evidenceRecognitionID" : "ECEAD0CF-75CB-4080-AA33-33EFBA32583A",
+      "evidenceTimestamp" : 398763.63159020798,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43050304172
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319491372383",
+      "evidenceRecognitionID" : "ECEAD0CF-75CB-4080-AA33-33EFBA32583A",
+      "evidenceTimestamp" : 398763.63159020798,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43050504167
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319634631017",
+      "evidenceRecognitionID" : "9CB0C74F-8CBA-4BD1-9D1C-A658F8A6FC18",
+      "evidenceTimestamp" : 398763.63992895797,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43050820834
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319634631017",
+      "evidenceRecognitionID" : "9CB0C74F-8CBA-4BD1-9D1C-A658F8A6FC18",
+      "evidenceTimestamp" : 398763.63992895797,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.63992895797,
+      "uptime" : 398765.43051008333
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319634631017",
+      "evidenceRecognitionID" : "9CB0C74F-8CBA-4BD1-9D1C-A658F8A6FC18",
+      "evidenceTimestamp" : 398763.63992895797,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43051220838
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319634631017",
+      "evidenceRecognitionID" : "9CB0C74F-8CBA-4BD1-9D1C-A658F8A6FC18",
+      "evidenceTimestamp" : 398763.63992895797,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43051425001
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319777891799",
+      "evidenceRecognitionID" : "ED8ACD37-4A91-4D81-831E-BDF6FA659EB8",
+      "evidenceTimestamp" : 398763.64826783299,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43051720836
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319777891799",
+      "evidenceRecognitionID" : "ED8ACD37-4A91-4D81-831E-BDF6FA659EB8",
+      "evidenceTimestamp" : 398763.64826783299,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.64826783299,
+      "uptime" : 398765.43051945837
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319777891799",
+      "evidenceRecognitionID" : "ED8ACD37-4A91-4D81-831E-BDF6FA659EB8",
+      "evidenceTimestamp" : 398763.64826783299,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43052158336
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319777891799",
+      "evidenceRecognitionID" : "ED8ACD37-4A91-4D81-831E-BDF6FA659EB8",
+      "evidenceTimestamp" : 398763.64826783299,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43052366667
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319921150433",
+      "evidenceRecognitionID" : "2D63D046-0D30-4EB3-AA66-75080B11C416",
+      "evidenceTimestamp" : 398763.65660658298,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43052679166
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319921150433",
+      "evidenceRecognitionID" : "2D63D046-0D30-4EB3-AA66-75080B11C416",
+      "evidenceTimestamp" : 398763.65660658298,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.65660658298,
+      "uptime" : 398765.43052875
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594319921150433",
+      "evidenceRecognitionID" : "2D63D046-0D30-4EB3-AA66-75080B11C416",
+      "evidenceTimestamp" : 398763.65660658298,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43053095834
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594319921150433",
+      "evidenceRecognitionID" : "2D63D046-0D30-4EB3-AA66-75080B11C416",
+      "evidenceTimestamp" : 398763.65660658298,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43053291668
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320064410493",
+      "evidenceRecognitionID" : "D96C56A2-5537-4ED0-AE4F-AAFD5B521AA8",
+      "evidenceTimestamp" : 398763.66494541598,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43053629168
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320064410493",
+      "evidenceRecognitionID" : "D96C56A2-5537-4ED0-AE4F-AAFD5B521AA8",
+      "evidenceTimestamp" : 398763.66494541598,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.66494541598,
+      "uptime" : 398765.43053825002
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320064410493",
+      "evidenceRecognitionID" : "D96C56A2-5537-4ED0-AE4F-AAFD5B521AA8",
+      "evidenceTimestamp" : 398763.66494541598,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43054045836
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320064410493",
+      "evidenceRecognitionID" : "D96C56A2-5537-4ED0-AE4F-AAFD5B521AA8",
+      "evidenceTimestamp" : 398763.66494541598,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.4305426667
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320207668423",
+      "evidenceRecognitionID" : "0C2AAA02-00A1-41C0-B9A2-4542F6F5BD3F",
+      "evidenceTimestamp" : 398763.67328412499,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43054600002
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320207668423",
+      "evidenceRecognitionID" : "0C2AAA02-00A1-41C0-B9A2-4542F6F5BD3F",
+      "evidenceTimestamp" : 398763.67328412499,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.67328412499,
+      "uptime" : 398765.43054795836
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320207668423",
+      "evidenceRecognitionID" : "0C2AAA02-00A1-41C0-B9A2-4542F6F5BD3F",
+      "evidenceTimestamp" : 398763.67328412499,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.4305501667
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320207668423",
+      "evidenceRecognitionID" : "0C2AAA02-00A1-41C0-B9A2-4542F6F5BD3F",
+      "evidenceTimestamp" : 398763.67328412499,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43055220833
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320350929909",
+      "evidenceRecognitionID" : "F41EB04C-48B7-4AC8-B28E-1988F45F873A",
+      "evidenceTimestamp" : 398763.68162304099,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.430555375
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320350929909",
+      "evidenceRecognitionID" : "F41EB04C-48B7-4AC8-B28E-1988F45F873A",
+      "evidenceTimestamp" : 398763.68162304099,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.68162304099,
+      "uptime" : 398765.43055733334
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320350929909",
+      "evidenceRecognitionID" : "F41EB04C-48B7-4AC8-B28E-1988F45F873A",
+      "evidenceTimestamp" : 398763.68162304099,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43055975001
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320350929909",
+      "evidenceRecognitionID" : "F41EB04C-48B7-4AC8-B28E-1988F45F873A",
+      "evidenceTimestamp" : 398763.68162304099,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43056200002
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320494187117",
+      "evidenceRecognitionID" : "443560A3-7291-4353-8683-C17EE0F3E372",
+      "evidenceTimestamp" : 398763.68996170798,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43056525005
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320494187117",
+      "evidenceRecognitionID" : "443560A3-7291-4353-8683-C17EE0F3E372",
+      "evidenceTimestamp" : 398763.68996170798,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.68996170798,
+      "uptime" : 398765.43056708336
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320494187117",
+      "evidenceRecognitionID" : "443560A3-7291-4353-8683-C17EE0F3E372",
+      "evidenceTimestamp" : 398763.68996170798,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43056925002
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320494187117",
+      "evidenceRecognitionID" : "443560A3-7291-4353-8683-C17EE0F3E372",
+      "evidenceTimestamp" : 398763.68996170798,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43057116668
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320637447899",
+      "evidenceRecognitionID" : "565B6907-BEC5-4393-814B-6B4FF47ADFC0",
+      "evidenceTimestamp" : 398763.698300583,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43057466671
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320637447899",
+      "evidenceRecognitionID" : "565B6907-BEC5-4393-814B-6B4FF47ADFC0",
+      "evidenceTimestamp" : 398763.698300583,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.698300583,
+      "uptime" : 398765.43057654169
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320637447899",
+      "evidenceRecognitionID" : "565B6907-BEC5-4393-814B-6B4FF47ADFC0",
+      "evidenceTimestamp" : 398763.698300583,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43057875003
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320637447899",
+      "evidenceRecognitionID" : "565B6907-BEC5-4393-814B-6B4FF47ADFC0",
+      "evidenceTimestamp" : 398763.698300583,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43058075005
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320780705107",
+      "evidenceRecognitionID" : "FE45B5CF-4941-4843-A08F-2FCEF44ED0A6",
+      "evidenceTimestamp" : 398763.70663924998,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43058400002
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320780705107",
+      "evidenceRecognitionID" : "FE45B5CF-4941-4843-A08F-2FCEF44ED0A6",
+      "evidenceTimestamp" : 398763.70663924998,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.70663924998,
+      "uptime" : 398765.43058595835
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320780705107",
+      "evidenceRecognitionID" : "FE45B5CF-4941-4843-A08F-2FCEF44ED0A6",
+      "evidenceTimestamp" : 398763.70663924998,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43058825005
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320780705107",
+      "evidenceRecognitionID" : "FE45B5CF-4941-4843-A08F-2FCEF44ED0A6",
+      "evidenceTimestamp" : 398763.70663924998,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43059016671
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320923967315",
+      "evidenceRecognitionID" : "0BB8AE82-0EA2-45BC-BB2A-8FE1EE328BBD",
+      "evidenceTimestamp" : 398763.71497820801,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43059366668
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320923967315",
+      "evidenceRecognitionID" : "0BB8AE82-0EA2-45BC-BB2A-8FE1EE328BBD",
+      "evidenceTimestamp" : 398763.71497820801,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.71497820801,
+      "uptime" : 398765.4305959167
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594320923967315",
+      "evidenceRecognitionID" : "0BB8AE82-0EA2-45BC-BB2A-8FE1EE328BBD",
+      "evidenceTimestamp" : 398763.71497820801,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43059829168
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594320923967315",
+      "evidenceRecognitionID" : "0BB8AE82-0EA2-45BC-BB2A-8FE1EE328BBD",
+      "evidenceTimestamp" : 398763.71497820801,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43060050003
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594321067224523",
+      "evidenceRecognitionID" : "4F93B7F5-72D8-4915-A108-2808E73BBDC6",
+      "evidenceTimestamp" : 398763.723316875,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43060395838
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594321067224523",
+      "evidenceRecognitionID" : "4F93B7F5-72D8-4915-A108-2808E73BBDC6",
+      "evidenceTimestamp" : 398763.723316875,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.723316875,
+      "uptime" : 398765.43060620833
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594321067224523",
+      "evidenceRecognitionID" : "4F93B7F5-72D8-4915-A108-2808E73BBDC6",
+      "evidenceTimestamp" : 398763.723316875,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43060950004
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594321067224523",
+      "evidenceRecognitionID" : "4F93B7F5-72D8-4915-A108-2808E73BBDC6",
+      "evidenceTimestamp" : 398763.723316875,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43061175005
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594321210485305",
+      "evidenceRecognitionID" : "43A1A21A-BC6E-4B53-B07F-B01F215AC9E5",
+      "evidenceTimestamp" : 398763.73165575002,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43061483337
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594321210485305",
+      "evidenceRecognitionID" : "43A1A21A-BC6E-4B53-B07F-B01F215AC9E5",
+      "evidenceTimestamp" : 398763.73165575002,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.73165575002,
+      "uptime" : 398765.43061679171
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594321210485305",
+      "evidenceRecognitionID" : "43A1A21A-BC6E-4B53-B07F-B01F215AC9E5",
+      "evidenceTimestamp" : 398763.73165575002,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43061904167
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594321210485305",
+      "evidenceRecognitionID" : "43A1A21A-BC6E-4B53-B07F-B01F215AC9E5",
+      "evidenceTimestamp" : 398763.73165575002,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43062091671
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594321353743939",
+      "evidenceRecognitionID" : "C22D7B29-294E-4C2F-A0F1-62D62912D011",
+      "evidenceTimestamp" : 398763.73999450001,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43062404171
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594321353743939",
+      "evidenceRecognitionID" : "C22D7B29-294E-4C2F-A0F1-62D62912D011",
+      "evidenceTimestamp" : 398763.73999450001,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.73999450001,
+      "uptime" : 398765.43062595837
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594321353743939",
+      "evidenceRecognitionID" : "C22D7B29-294E-4C2F-A0F1-62D62912D011",
+      "evidenceTimestamp" : 398763.73999450001,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43062808336
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594321353743939",
+      "evidenceRecognitionID" : "C22D7B29-294E-4C2F-A0F1-62D62912D011",
+      "evidenceTimestamp" : 398763.73999450001,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43063008337
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594321497003999",
+      "evidenceRecognitionID" : "0B81C36A-8754-4091-9EF2-51D1978B6813",
+      "evidenceTimestamp" : 398763.748333333,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43063320837
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594321497003999",
+      "evidenceRecognitionID" : "0B81C36A-8754-4091-9EF2-51D1978B6813",
+      "evidenceTimestamp" : 398763.748333333,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398763.748333333,
+      "uptime" : 398765.43063508335
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594321497003999",
+      "evidenceRecognitionID" : "0B81C36A-8754-4091-9EF2-51D1978B6813",
+      "evidenceTimestamp" : 398763.748333333,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43063795834
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594321497003999",
+      "evidenceRecognitionID" : "0B81C36A-8754-4091-9EF2-51D1978B6813",
+      "evidenceTimestamp" : 398763.748333333,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43063995836
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594342556134168",
+      "evidenceRecognitionID" : "ED51ACF3-A178-41BE-8924-025D19642B80",
+      "evidenceTimestamp" : 398764.97413604101,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43064304168
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594342556134168",
+      "evidenceRecognitionID" : "ED51ACF3-A178-41BE-8924-025D19642B80",
+      "evidenceTimestamp" : 398764.97413604101,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398764.97413604101,
+      "uptime" : 398765.43064495834
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594342556134168",
+      "evidenceRecognitionID" : "ED51ACF3-A178-41BE-8924-025D19642B80",
+      "evidenceTimestamp" : 398764.97413604101,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43064729171
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594342556134168",
+      "evidenceRecognitionID" : "ED51ACF3-A178-41BE-8924-025D19642B80",
+      "evidenceTimestamp" : 398764.97413604101,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43064929167
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594343272429486",
+      "evidenceRecognitionID" : "52EC73F5-4091-418E-A272-82F183F4B743",
+      "evidenceTimestamp" : 398765.015829916,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43065241672
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594343272429486",
+      "evidenceRecognitionID" : "52EC73F5-4091-418E-A272-82F183F4B743",
+      "evidenceTimestamp" : 398765.015829916,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398765.015829916,
+      "uptime" : 398765.43065425003
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594343272429486",
+      "evidenceRecognitionID" : "52EC73F5-4091-418E-A272-82F183F4B743",
+      "evidenceTimestamp" : 398765.015829916,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43065641669
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594343272429486",
+      "evidenceRecognitionID" : "52EC73F5-4091-418E-A272-82F183F4B743",
+      "evidenceTimestamp" : 398765.015829916,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43065829168
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594344275244220",
+      "evidenceRecognitionID" : "51F1869F-37D3-406F-8CFC-93A79E96FB11",
+      "evidenceTimestamp" : 398765.07420141599,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43066145835
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594344275244220",
+      "evidenceRecognitionID" : "51F1869F-37D3-406F-8CFC-93A79E96FB11",
+      "evidenceTimestamp" : 398765.07420141599,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398765.07420141599,
+      "uptime" : 398765.43066337501
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594344275244220",
+      "evidenceRecognitionID" : "51F1869F-37D3-406F-8CFC-93A79E96FB11",
+      "evidenceTimestamp" : 398765.07420141599,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43066558335
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594344275244220",
+      "evidenceRecognitionID" : "51F1869F-37D3-406F-8CFC-93A79E96FB11",
+      "evidenceTimestamp" : 398765.07420141599,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43066754169
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594345134800320",
+      "evidenceRecognitionID" : "A1CE3632-9F6F-4BEB-A852-4BB5F1900694",
+      "evidenceTimestamp" : 398765.124234166,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43067058333
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594345134800320",
+      "evidenceRecognitionID" : "A1CE3632-9F6F-4BEB-A852-4BB5F1900694",
+      "evidenceTimestamp" : 398765.124234166,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398765.124234166,
+      "uptime" : 398765.43067245837
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594345134800320",
+      "evidenceRecognitionID" : "A1CE3632-9F6F-4BEB-A852-4BB5F1900694",
+      "evidenceTimestamp" : 398765.124234166,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43067483336
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594345134800320",
+      "evidenceRecognitionID" : "A1CE3632-9F6F-4BEB-A852-4BB5F1900694",
+      "evidenceTimestamp" : 398765.124234166,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43067683338
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594346424133766",
+      "evidenceRecognitionID" : "E01C97F6-7756-46F0-97C5-BDA7D1DA84BA",
+      "evidenceTimestamp" : 398765.19928325003,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.4306801667
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594346424133766",
+      "evidenceRecognitionID" : "E01C97F6-7756-46F0-97C5-BDA7D1DA84BA",
+      "evidenceTimestamp" : 398765.19928325003,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398765.19928325003,
+      "uptime" : 398765.43068204168
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594346424133766",
+      "evidenceRecognitionID" : "E01C97F6-7756-46F0-97C5-BDA7D1DA84BA",
+      "evidenceTimestamp" : 398765.19928325003,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43068420835
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594346424133766",
+      "evidenceRecognitionID" : "E01C97F6-7756-46F0-97C5-BDA7D1DA84BA",
+      "evidenceTimestamp" : 398765.19928325003,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43068612501
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594347140431231",
+      "evidenceRecognitionID" : "B1857318-BB8A-4DDC-8D63-F17A7C5FFECB",
+      "evidenceTimestamp" : 398765.24097724998,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43068925
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594347140431231",
+      "evidenceRecognitionID" : "B1857318-BB8A-4DDC-8D63-F17A7C5FFECB",
+      "evidenceTimestamp" : 398765.24097724998,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398765.24097724998,
+      "uptime" : 398765.43069116666
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594347140431231",
+      "evidenceRecognitionID" : "B1857318-BB8A-4DDC-8D63-F17A7C5FFECB",
+      "evidenceTimestamp" : 398765.24097724998,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43069325003
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594347140431231",
+      "evidenceRecognitionID" : "B1857318-BB8A-4DDC-8D63-F17A7C5FFECB",
+      "evidenceTimestamp" : 398765.24097724998,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43069520837
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594348143246670",
+      "evidenceRecognitionID" : "58EDDFAD-8DC3-46D4-B089-8C5FDF29E447",
+      "evidenceTimestamp" : 398765.29934879101,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43069829169
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594348143246670",
+      "evidenceRecognitionID" : "58EDDFAD-8DC3-46D4-B089-8C5FDF29E447",
+      "evidenceTimestamp" : 398765.29934879101,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398765.29934879101,
+      "uptime" : 398765.43070020835
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594348143246670",
+      "evidenceRecognitionID" : "58EDDFAD-8DC3-46D4-B089-8C5FDF29E447",
+      "evidenceTimestamp" : 398765.29934879101,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43070241669
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594348143246670",
+      "evidenceRecognitionID" : "58EDDFAD-8DC3-46D4-B089-8C5FDF29E447",
+      "evidenceTimestamp" : 398765.29934879101,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43070437503
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594349146060699",
+      "evidenceRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "evidenceTimestamp" : 398765.35772024997,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "timeline.replay",
+      "uptime" : 398765.43070741667
+    },
+    {
+      "decisionPublished" : false,
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594349146060699",
+      "evidenceRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "evidenceTimestamp" : 398765.35772024997,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.input",
+      "timestamp" : 398765.35772024997,
+      "uptime" : 398765.43070925004
+    },
+    {
+      "detections" : [
+
+      ],
+      "evidenceFrameID" : "4690594349146060699",
+      "evidenceRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "evidenceTimestamp" : 398765.35772024997,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stage" : "track.sanitized",
+      "uptime" : 398765.43071154167
+    },
+    {
+      "decisionPublished" : false,
+      "evidenceFrameID" : "4690594349146060699",
+      "evidenceRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "evidenceTimestamp" : 398765.35772024997,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "proposalCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "history",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "track.output",
+      "uptime" : 398765.43071354169
+    },
+    {
+      "evidenceFrameID" : "4690594349146060699",
+      "evidenceTimestamp" : 398765.35772024997,
+      "processingRecognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+      "publishedDecisionCount" : 0,
+      "recordCount" : 0,
+      "replayMode" : "publicationMapping",
+      "replayPassID" : "167F7019-83F2-46A9-B983-16DC27642BFC",
+      "stableDetections" : [
+
+      ],
+      "stage" : "timeline.output",
+      "uptime" : 398765.43071870838
+    }
+  ],
+  "estimatedMetadataBytes" : 1088010,
+  "frameID" : "4690594349146060699",
+  "inputSaved" : true,
+  "inputState" : "saved",
+  "metadataByteLimit" : 8388608,
+  "metadataComplete" : true,
+  "recognitionID" : "DBAF48BA-99B0-4099-9230-B27B001316D8",
+  "runID" : "BC5D34CE-C7CF-49B6-A47A-063FAAA6EAA7",
+  "schemaVersion" : 1,
+  "sessionID" : "8",
+  "testLabel" : "OCCLUDED 9C",
+  "truncatedEntries" : 0,
+  "uiReceipts" : [
+
+  ]
+}

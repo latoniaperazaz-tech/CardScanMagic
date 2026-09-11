@@ -1,0 +1,30 @@
+{
+  "attachmentsFile" : "recognition_input_attachments.plist",
+  "attachmentsSHA256" : "a84052646b6309d977773c8ab611b1e9bd63d7eaf4c15b650e549552c5c9ac40",
+  "height" : 1176,
+  "metadataComplete" : true,
+  "orientation" : 1,
+  "pixelFormat" : 875704422,
+  "planar" : true,
+  "planes" : [
+    {
+      "bytesPerRow" : 704,
+      "file" : "recognition_input_plane_0.bin",
+      "height" : 1176,
+      "sha256" : "b94cbc32286b2841ef5b595fd7139c3eaec79b685ae52705013ea4140a1a7d11",
+      "width" : 660
+    },
+    {
+      "bytesPerRow" : 704,
+      "file" : "recognition_input_plane_1.bin",
+      "height" : 588,
+      "sha256" : "b8c625c49d309c9ed2643215ca97e6eacc0c42b72f00e4e64b4aa1c40b6c28a7",
+      "width" : 330
+    }
+  ],
+  "schemaVersion" : 2,
+  "unsupportedAttachments" : [
+
+  ],
+  "width" : 660
+}
