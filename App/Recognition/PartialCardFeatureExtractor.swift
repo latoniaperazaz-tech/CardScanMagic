@@ -547,7 +547,7 @@ final class PartialCardFeatureExtractor {
                     // region in both dimensions.
                     let bounded = $0.bounds.width <= CGFloat(raster.width) * 0.85
                         && $0.bounds.height <= CGFloat(raster.height) * 0.90
-                        && $0.pixels.count <= count * 0.70
+                        && $0.pixels.count <= Int(Double(count) * 0.70)
                     // Adaptive proposals use a smaller, explicit locator
                     // floor because the card may be split by a hand/shadow;
                     // the production surface threshold remains unchanged.
