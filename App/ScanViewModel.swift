@@ -4,11 +4,6 @@ import UIKit
 
 @MainActor
 final class ScanViewModel: ObservableObject {
-    /// This app is used for a three-card 炸金花 deal. Keeping the limit
-    /// in one place prevents a fourth card (or a duplicate callback) from
-    /// leaking into the history while the camera is still shutting down.
-    static let cardsPerRound = 3
-
     @Published private(set) var records: [CardRecord] = []
     @Published private(set) var detections: [CardDetection] = []
     @Published private(set) var isScanning = false
@@ -16,30 +11,17 @@ final class ScanViewModel: ObservableObject {
     @Published private(set) var isRoundComplete = false
     @Published private(set) var statusText = "准备就绪"
     @Published var alertMessage: String?
-    @Published private(set) var traceText = "Trace 尚未开始"
-    @Published private(set) var traceUpdatedAt = Date()
-    @Published private(set) var traceExportText = ""
-    private var lastTraceSessionID: ScanPipeline.SessionID?
-
+    @Published private(set) var cameraSelection: CameraSelection = .rear1x
     let camera = CameraService()
-    private let pipeline = ScanPipeline()
+    // The production UI no longer exposes Trace. Keep diagnostics disabled
+    // for this build even if an older install left the user-default switch on.
+    private let pipeline = ScanPipeline(
+        traceConfiguration: RecognitionTraceConfiguration(enabled: false)
+    )
     private var activeSessionID: ScanPipeline.SessionID?
     private var startRequestID: UInt64 = 0
 
     init() {
-        pipeline.onRecognitionTrace = { [weak self] sessionID, _, text in
-            Task { @MainActor in
-                guard let self, self.lastTraceSessionID == nil || sessionID >= self.lastTraceSessionID! else { return }
-                self.lastTraceSessionID = sessionID
-                self.traceText = text
-                self.traceUpdatedAt = Date()
-            }
-        }
-        pipeline.onTraceExport = { [weak self] url, complete in
-            Task { @MainActor in
-                self?.traceExportText = (complete ? "已导出：" : "导出不完整：") + url.lastPathComponent
-            }
-        }
         camera.onDroppedFrame = { [weak self] in self?.pipeline.cameraDroppedFrame() }
         camera.onCallbackBegan = { [weak self] timestamp in self?.pipeline.cameraCallbackBegan(timestamp: timestamp) }
         camera.onFrame = { [weak self] pixelBuffer, timestamp, orientation in
@@ -78,26 +60,15 @@ final class ScanViewModel: ObservableObject {
                 }
 
                 // A single model update can contain more than one confirmed
-                // track, and an older queued callback can arrive just as the
-                // third card completes the hand. De-duplicate again at the UI
-                // boundary and take only the remaining slots as a final guard.
+                // track. De-duplicate again at the UI boundary while keeping
+                // the session-level card identity rule intact.
                 let uniqueRecords = self.uniqueRecords(from: newRecords)
-                let remaining = max(0, Self.cardsPerRound - self.records.count)
                 let uniqueIDs = Set(uniqueRecords.map(\.id))
                 for record in newRecords where !uniqueIDs.contains(record.id) {
                     rejectReasons[record.id] = "SESSION_DUPLICATE"
                 }
-                for record in uniqueRecords.dropFirst(remaining) {
-                    rejectReasons[record.id] = "UI_REJECTED:roundCapacity"
-                }
-                if remaining > 0 {
-                    accepted = Array(uniqueRecords.prefix(remaining))
-                    self.records.append(contentsOf: accepted)
-                }
-
-                if self.records.count >= Self.cardsPerRound {
-                    self.completeRound()
-                }
+                accepted = uniqueRecords
+                self.records.append(contentsOf: accepted)
             }
         }
         pipeline.onDetections = { [weak self] sessionID, newDetections in
@@ -107,8 +78,7 @@ final class ScanViewModel: ObservableObject {
                       self.activeSessionID == sessionID else {
                     return
                 }
-                guard !self.isRoundComplete,
-                      self.records.count < Self.cardsPerRound else {
+                guard !self.isRoundComplete else {
                     self.detections = []
                     return
                 }
@@ -125,12 +95,6 @@ final class ScanViewModel: ObservableObject {
 
     func startScanning() {
         guard !isScanning, !isPreparing else { return }
-
-        guard records.count < Self.cardsPerRound else {
-            isRoundComplete = true
-            statusText = "本轮已完成 · 请先清空"
-            return
-        }
 
         isPreparing = true
         isRoundComplete = false
@@ -168,6 +132,12 @@ final class ScanViewModel: ObservableObject {
         startScanning()
     }
 
+    func setCameraSelection(_ selection: CameraSelection) {
+        guard !isScanning, !isPreparing else { return }
+        cameraSelection = selection
+        camera.setCameraSelection(selection)
+    }
+
     func stopScanning() {
         startRequestID &+= 1
         activeSessionID = nil
@@ -179,7 +149,7 @@ final class ScanViewModel: ObservableObject {
         isRoundComplete = false
         statusText = records.isEmpty
             ? "已暂停"
-            : "已暂停 · \(records.count)/\(Self.cardsPerRound) 张"
+            : "已暂停 · 已记录 \(records.count) 张"
     }
 
     func clearRecords() {
@@ -197,23 +167,6 @@ final class ScanViewModel: ObservableObject {
 
     private func handleCameraError(_ error: Error) {
         finishScanning(with: error, status: "无法扫描")
-    }
-
-    /// Stops capture as soon as the three-card hand is complete. This avoids
-    /// spending inference time on the table after the hand and makes the
-    /// result deterministic when the performer turns the phone over.
-    private func completeRound() {
-        guard isScanning else { return }
-
-        startRequestID &+= 1
-        activeSessionID = nil
-        pipeline.stop()
-        camera.stop()
-        isPreparing = false
-        isScanning = false
-        detections = []
-        isRoundComplete = true
-        statusText = "已识别 \(Self.cardsPerRound) 张 · 本轮完成"
     }
 
     private func uniqueRecords(from incoming: [CardRecord]) -> [CardRecord] {

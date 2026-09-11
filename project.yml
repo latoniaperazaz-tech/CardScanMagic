@@ -32,7 +32,7 @@ targets:
         CURRENT_PROJECT_VERSION: "3"
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_CFBundleDisplayName: "计算机"
-        INFOPLIST_KEY_NSCameraUsageDescription: "Use the rear camera to recognize playing cards dealt above the phone."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Use the selected camera to recognize playing cards."
         # Supplying a launch storyboard opts the app into the device's native
         # screen size. Without it, iOS can place a newly sideloaded app in a
         # legacy 3:2 compatibility canvas, which appears as large black bars
