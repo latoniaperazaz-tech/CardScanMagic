@@ -181,6 +181,10 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .frame(width: 56, height: 56)
+        // Keep the lens switch below the Dynamic Island and give its hit area
+        // the same visual position as the button. It remains available in the
+        // stopped scanner state, where camera changes are allowed.
+        .padding(.top, 24)
         .contentShape(Rectangle())
         .disabled(viewModel.isPreparing || viewModel.isScanning)
         .opacity(viewModel.isPreparing || viewModel.isScanning ? 0.48 : 1)

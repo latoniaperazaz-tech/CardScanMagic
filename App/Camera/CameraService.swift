@@ -322,6 +322,16 @@ final class CameraService: NSObject {
         if camera.isFocusModeSupported(.continuousAutoFocus) {
             camera.focusMode = .continuousAutoFocus
         }
+        // Cards are presented close to the lens. Keep the autofocus search in
+        // the near range when the device exposes that control; otherwise the
+        // camera can settle on the distant table/background and the captured
+        // frame remains soft even though the card is visibly large.
+        if camera.isAutoFocusRangeRestrictionSupported {
+            camera.autoFocusRangeRestriction = .near
+        }
+        if camera.isFocusPointOfInterestSupported {
+            camera.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+        }
         if camera.isExposureModeSupported(.continuousAutoExposure) {
             camera.exposureMode = .continuousAutoExposure
             if let maximumExposure = CameraCapturePolicy.clampedMaximumExposureDuration(
