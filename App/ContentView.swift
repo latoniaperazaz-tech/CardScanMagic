@@ -122,6 +122,8 @@ struct ContentView: View {
 
             statusReadout
 
+            cameraMenu
+
             topControl(
                 systemImage: viewModel.isPreparing
                     ? "hourglass"
@@ -160,10 +162,35 @@ struct ContentView: View {
         .allowsHitTesting(true)
     }
 
+    private var cameraMenu: some View {
+        Menu {
+            ForEach(CameraSelection.allCases) { selection in
+                Button {
+                    viewModel.setCameraSelection(selection)
+                } label: {
+                    Label(selection.displayName, systemImage: selection == viewModel.cameraSelection ? "checkmark" : "")
+                }
+            }
+        } label: {
+            Image(systemName: "camera.fill")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.black)
+                .frame(width: 48, height: 48)
+                .background(Color.white.opacity(0.92), in: Circle())
+                .overlay { Circle().stroke(.white.opacity(0.2), lineWidth: 1) }
+        }
+        .buttonStyle(.plain)
+        .frame(width: 56, height: 56)
+        .contentShape(Rectangle())
+        .disabled(viewModel.isPreparing || viewModel.isScanning)
+        .opacity(viewModel.isPreparing || viewModel.isScanning ? 0.48 : 1)
+        .accessibilityLabel("选择摄像头")
+    }
+
     private var statusReadout: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("炸金花 · 三张牌")
+                Text("炸金花 · 连续识别")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.74))
 
@@ -180,7 +207,7 @@ struct ContentView: View {
         .frame(height: 48)
         .background(.black.opacity(0.72), in: Capsule())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("炸金花三张牌，\(viewModel.statusText)")
+        .accessibilityLabel("炸金花连续识别，\(viewModel.statusText)")
     }
 
     private var calculatorEntry: some View {
@@ -294,7 +321,7 @@ struct ContentView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded ? "收起三张牌记录" : "展开三张牌记录")
+                .accessibilityLabel(isExpanded ? "收起牌记录" : "展开牌记录")
                 .accessibilityHint("双击可切换记录面板")
             } else {
                 VStack(spacing: 0) {
@@ -302,7 +329,7 @@ struct ContentView: View {
                     drawerSummary(isExpanded: true, isInteractable: false)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("扫描已暂停，正在显示本手三张牌记录")
+                .accessibilityLabel("扫描已暂停，正在显示本轮牌记录")
             }
 
             if isExpanded {
@@ -351,11 +378,11 @@ struct ContentView: View {
     private func drawerSummary(isExpanded: Bool, isInteractable: Bool) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("本手牌（最多三张）")
+                Text("本轮牌记录")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
 
-                Text("\(viewModel.records.count)/\(ScanViewModel.cardsPerRound) 张")
+                Text("\(viewModel.records.count) 张")
                     .font(.title3.monospacedDigit().weight(.bold))
                     .contentTransition(.numericText())
             }
@@ -364,7 +391,7 @@ struct ContentView: View {
             if let latestRecord = viewModel.records.last {
                 LatestCardSummary(record: latestRecord)
             } else {
-                Text("等待发牌（最多三张）")
+                Text("等待发牌")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

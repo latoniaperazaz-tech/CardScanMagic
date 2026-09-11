@@ -3,9 +3,33 @@ import Foundation
 import ImageIO
 import UIKit
 
+enum CameraSelection: String, CaseIterable, Identifiable, Equatable {
+    case rear1x
+    case rear05x
+    case front1x
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .rear1x: return "后置 1×"
+        case .rear05x: return "后置 0.5×"
+        case .front1x: return "前置 1×"
+        }
+    }
+
+    var position: AVCaptureDevice.Position {
+        switch self {
+        case .rear1x, .rear05x: return .back
+        case .front1x: return .front
+        }
+    }
+}
+
 enum CameraError: LocalizedError {
     case accessDenied
     case noRearCamera
+    case noFrontCamera
     case cannotAddInput
     case cannotAddOutput
     case unsupportedFrameDuration
@@ -14,6 +38,7 @@ enum CameraError: LocalizedError {
         switch self {
         case .accessDenied: return "请在系统设置中允许此 App 使用相机。"
         case .noRearCamera: return "找不到后置摄像头。"
+        case .noFrontCamera: return "找不到前置摄像头。"
         case .cannotAddInput: return "无法连接后置摄像头。"
         case .cannotAddOutput: return "无法读取摄像头画面。"
         case .unsupportedFrameDuration: return "摄像头帧率配置失败，请重新开始扫描。"
@@ -42,9 +67,36 @@ final class CameraService: NSObject {
     private var configuredFrameRate = 30
     private var wantsToRun = false
     private var activeCamera: AVCaptureDevice?
+    private var selectedCamera = CameraSelection.rear1x
     private var diagnosticsStartTime: TimeInterval?
     private var diagnosticsFrameCount = 0
     private let outputOrientation: AVCaptureVideoOrientation = .portrait
+
+    var cameraSelection: CameraSelection {
+        sessionQueue.sync { selectedCamera }
+    }
+
+    func setCameraSelection(_ selection: CameraSelection) {
+        sessionQueue.async { [weak self] in
+            guard let self, self.selectedCamera != selection else { return }
+            self.selectedCamera = selection
+
+            let wasRunning = self.session.isRunning
+            if wasRunning { self.session.stopRunning() }
+            self.resetConfigurationForSelection()
+
+            guard self.isWantedToRun else { return }
+            do {
+                let frameRate = try self.configureIfNeeded()
+                self.session.startRunning()
+                DispatchQueue.main.async { [weak self] in
+                    self?.onModeChanged?(frameRate)
+                }
+            } catch {
+                self.report(error)
+            }
+        }
+    }
 
     func start() {
         setWantsToRun(true)
@@ -102,16 +154,20 @@ final class CameraService: NSObject {
 
     /// Prefer the physical 1x camera so a fast card cannot trigger a virtual
     /// device lens switch while it crosses the recognition zone.
-    private func preferredRearCamera() -> AVCaptureDevice? {
-        let preferredTypes: [AVCaptureDevice.DeviceType] = [
-            .builtInWideAngleCamera,
-            .builtInTripleCamera,
-            .builtInDualWideCamera
-        ]
+    private func preferredCamera() -> AVCaptureDevice? {
+        let preferredTypes: [AVCaptureDevice.DeviceType]
+        switch selectedCamera {
+        case .rear1x:
+            preferredTypes = [.builtInWideAngleCamera, .builtInTripleCamera, .builtInDualWideCamera]
+        case .rear05x:
+            preferredTypes = [.builtInUltraWideCamera, .builtInDualWideCamera, .builtInTripleCamera]
+        case .front1x:
+            preferredTypes = [.builtInTrueDepthCamera, .builtInWideAngleCamera]
+        }
         let devices = AVCaptureDevice.DiscoverySession(
             deviceTypes: preferredTypes,
             mediaType: .video,
-            position: .back
+            position: selectedCamera.position
         ).devices
 
         return preferredTypes.compactMap { type in
@@ -121,8 +177,8 @@ final class CameraService: NSObject {
 
     private func configureIfNeeded() throws -> Int {
         guard !isConfigured else { return configuredFrameRate }
-        guard let camera = preferredRearCamera() else {
-            throw CameraError.noRearCamera
+        guard let camera = preferredCamera() else {
+            throw selectedCamera.position == .front ? CameraError.noFrontCamera : CameraError.noRearCamera
         }
         activeCamera = camera
 
@@ -179,6 +235,19 @@ final class CameraService: NSObject {
         configuredFrameRate = frameRate
         wasConfigured = true
         return frameRate
+    }
+
+    private func resetConfigurationForSelection() {
+        guard isConfigured || !session.inputs.isEmpty else {
+            activeCamera = nil
+            return
+        }
+        session.beginConfiguration()
+        defer { session.commitConfiguration() }
+        for input in session.inputs { session.removeInput(input) }
+        for output in session.outputs { session.removeOutput(output) }
+        activeCamera = nil
+        isConfigured = false
     }
 
     @discardableResult
@@ -251,7 +320,7 @@ final class CameraService: NSObject {
             camera.isSmoothAutoFocusEnabled = false
         }
 
-        let requestedZoom = 1.0
+        let requestedZoom = selectedCamera == .rear05x ? 0.5 : 1.0
         let clampedZoom = min(
             max(requestedZoom, camera.minAvailableVideoZoomFactor),
             camera.maxAvailableVideoZoomFactor
