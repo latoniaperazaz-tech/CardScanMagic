@@ -91,7 +91,8 @@ final class RealCardCandidateLocalizationTests: XCTestCase {
             "\(name)_recognition_input_attachments.plist": "recognition_input_attachments.plist"
         ]
         for (resource, destination) in files {
-            let url = try XCTUnwrap(bundle.url(forResource: resource, withExtension: nil),
+            let url = try XCTUnwrap(bundle.url(forResource: resource, withExtension: nil,
+                                                subdirectory: "Fixtures"),
                                     "missing bundled fixture \(resource)")
             try FileManager.default.copyItem(at: url, to: directory.appendingPathComponent(destination))
         }

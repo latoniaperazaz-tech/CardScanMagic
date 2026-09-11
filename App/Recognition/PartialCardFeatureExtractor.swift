@@ -1049,7 +1049,11 @@ final class PartialCardFeatureExtractor {
     private static func isInternalSymbolProposal(_ box: CGRect, imageExtent: CGRect) -> Bool {
         let frameArea = max(1, imageExtent.width * imageExtent.height)
         let fraction = Double(max(0, box.width * box.height) / frameArea)
-        return fraction < 0.025
+        // Keep the gate narrow: the real failures were ~1% proposals for a
+        // single pip. Larger rectangles remain eligible for the existing
+        // synthetic/full-card path and are validated by the normal aspect and
+        // evidence stages.
+        return fraction < 0.012
     }
 
     /// Construct a conservative context window around an internal symbol.
