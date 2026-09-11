@@ -63,7 +63,10 @@ enum CameraCapturePolicy {
             return nil
         }
         let upperBound = CMTimeCompare(maximum, frameDuration) <= 0 ? maximum : frameDuration
-        let requested = CMTime(value: 1, timescale: 1_000)
+        // Permit exposure up to one captured frame. A 1 ms ceiling makes an
+        // indoor iPhone preview nearly black; the device's auto-exposure
+        // still chooses a shorter shutter when motion requires it.
+        let requested = CMTime(value: 1, timescale: 30)
         // Keep the hardware's rational endpoints, even when an endpoint has
         // the same seconds value as the request but a different timescale.
         if CMTimeCompare(requested, minimum) <= 0 { return minimum }
